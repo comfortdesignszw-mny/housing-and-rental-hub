@@ -1,0 +1,7 @@
+{
+  "name": "Comfort Housing and Rental Hub",
+  "description": "A lightweight, offline-first housing and rental platform for Zimbabwe. Rent listings, landlord property management, roommate matching, and offline-first syncing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

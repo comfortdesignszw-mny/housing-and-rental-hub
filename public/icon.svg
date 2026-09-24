@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#047857" />
+      <stop offset="50%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#065f46" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c22" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="108" fill="url(#bgGrad)" />
+
+  <!-- Subtle Zimbabwe chevron geometric pattern in background -->
+  <g opacity="0.08" stroke="#ffffff" stroke-width="6" fill="none">
+    <path d="M 0 100 L 256 220 L 512 100" />
+    <path d="M 0 180 L 256 300 L 512 180" />
+    <path d="M 0 260 L 256 380 L 512 260" />
+    <path d="M 0 340 L 256 460 L 512 340" />
+  </g>
+
+  <!-- Main House & Key Emblem -->
+  <g filter="url(#shadow)">
+    <!-- House outline -->
+    <path d="M 256 95 L 105 225 C 100 230 100 238 106 243 L 125 259 C 130 263 138 263 143 258 L 256 160 L 369 258 C 374 263 382 263 387 259 L 406 243 C 412 238 412 230 407 225 Z" fill="url(#accentGrad)" />
+    
+    <!-- House Body -->
+    <path d="M 135 240 L 135 395 C 135 410 147 422 162 422 L 350 422 C 365 422 377 410 377 395 L 377 240 L 256 135 Z" fill="#ffffff" />
+
+    <!-- Chimney / Solar symbol -->
+    <rect x="325" y="130" width="32" height="60" rx="6" fill="#f59e0b" />
+
+    <!-- Door / Comfort Arch -->
+    <path d="M 220 422 L 220 315 C 220 295 236 280 256 280 C 276 280 292 295 292 315 L 292 422 Z" fill="#047857" />
+
+    <!-- Window left -->
+    <rect x="168" y="275" width="34" height="42" rx="6" fill="#0284c7" />
+    <line x1="185" y1="275" x2="185" y2="317" stroke="#ffffff" stroke-width="2.5" />
+    <line x1="168" y1="296" x2="202" y2="296" stroke="#ffffff" stroke-width="2.5" />
+
+    <!-- Window right -->
+    <rect x="310" y="275" width="34" height="42" rx="6" fill="#0284c7" />
+    <line x1="327" y1="275" x2="327" y2="317" stroke="#ffffff" stroke-width="2.5" />
+    <line x1="310" y1="296" x2="344" y2="296" stroke="#ffffff" stroke-width="2.5" />
+
+    <!-- Golden Key / Shield Emblem in Center -->
+    <circle cx="256" cy="235" r="16" fill="url(#accentGrad)" />
+    <circle cx="256" cy="235" r="8" fill="#ffffff" />
+    
+    <!-- Offline Beacon pulse / Star -->
+    <polygon points="256,70 262,84 278,86 266,97 270,113 256,104 242,113 246,97 234,86 250,84" fill="#fbbf24" />
+  </g>
+</svg>
