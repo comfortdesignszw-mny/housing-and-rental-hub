@@ -3,6 +3,7 @@ export type UserRole = 'tenant' | 'landlord' | 'property_manager' | 'admin' | 'g
 export interface User {
   id: string;
   name: string;
+  companyName?: string;
   email: string;
   phone: string;
   whatsappNumber?: string;

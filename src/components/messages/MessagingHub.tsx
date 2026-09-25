@@ -20,6 +20,8 @@ import {
   Phone,
   ShieldCheck,
   Search,
+  Home,
+  LogIn,
 } from 'lucide-react';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
@@ -31,6 +33,8 @@ interface MessagingHubProps {
   initialRecipientName?: string | null;
   initialPropertyId?: string | null;
   onClearInitial?: () => void;
+  onNavigateToListings?: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const MessagingHub: React.FC<MessagingHubProps> = ({
@@ -38,6 +42,8 @@ export const MessagingHub: React.FC<MessagingHubProps> = ({
   initialRecipientName,
   initialPropertyId,
   onClearInitial,
+  onNavigateToListings,
+  onOpenAuthModal,
 }) => {
   const { currentUser, isGuest } = useAuth();
   const isOnline = useOnlineStatus();

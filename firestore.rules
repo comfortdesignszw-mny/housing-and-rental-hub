@@ -42,7 +42,7 @@ service cloud.firestore {
     // 1. Users collection
     function isValidUser(data) {
       return data.keys().hasAll(['id', 'name', 'email', 'role', 'createdAt']) &&
-        data.keys().hasOnly(['id', 'name', 'email', 'phone', 'whatsappNumber', 'role', 'avatar', 'verified', 'createdAt', 'bio', 'city']) &&
+        data.keys().hasOnly(['id', 'name', 'email', 'phone', 'whatsappNumber', 'role', 'avatar', 'verified', 'createdAt', 'bio', 'city', 'companyName']) &&
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
         data.email is string && data.email.size() <= 150 &&
@@ -50,6 +50,7 @@ service cloud.firestore {
         data.createdAt is number &&
         (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
         (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30)) &&
+        (!('companyName' in data) || (data.companyName is string && data.companyName.size() <= 150)) &&
         (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500000)) &&
         (!('verified' in data) || (data.verified is bool)) &&
         (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
@@ -75,7 +76,7 @@ service cloud.firestore {
           incoming().id == existing().id &&
           incoming().createdAt == existing().createdAt &&
           incoming().role == existing().role &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'whatsappNumber', 'bio', 'city', 'avatar'])
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'whatsappNumber', 'bio', 'city', 'avatar', 'companyName'])
         )
       );
 

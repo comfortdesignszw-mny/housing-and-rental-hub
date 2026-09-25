@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -21,6 +21,19 @@ export const Header: React.FC<HeaderProps> = ({
   const { currentUser, role, isGuest, isAuthenticated, logout } = useAuth();
   const isOnline = useOnlineStatus();
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close account menu when clicking anywhere outside
+  useEffect(() => {
+    if (!showAccountMenu) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setShowAccountMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAccountMenu]);
 
   const unreadCount = useLiveQuery(
     () => db.notifications.where('read').equals(0 as any).count(),
@@ -104,8 +117,21 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Authenticated User on Top Bar (No profile switching toggle) */}
-          <div className="relative">
+          {/* Prominent Log In Button for Guest Mode (Requirement 4) */}
+          {isGuest && (
+            <button
+              type="button"
+              onClick={onOpenAuthModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
+              title="Sign in or register for Comfort Housing"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Log In</span>
+            </button>
+          )}
+
+          {/* User Profile Menu on Top Bar */}
+          <div className="relative" ref={accountMenuRef}>
             <button
               onClick={() => setShowAccountMenu(!showAccountMenu)}
               className="flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-xl border border-slate-200 hover:bg-slate-50 transition cursor-pointer"

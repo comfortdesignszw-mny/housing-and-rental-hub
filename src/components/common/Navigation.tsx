@@ -12,7 +12,7 @@ interface NavigationProps {
 }
 
 export const Navigation: React.FC<NavigationProps> = ({ currentTab, onTabChange }) => {
-  const { role, currentUser } = useAuth();
+  const { role, currentUser, isGuest } = useAuth();
 
   const unreadMessagesCount = useLiveQuery(
     () =>
@@ -26,7 +26,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentTab, onTabChange 
     [currentUser?.id]
   ) || 0;
 
-  const tabs = [
+  const allTabs = [
     {
       id: 'listings' as NavTab,
       label: 'Listings',
@@ -58,6 +58,9 @@ export const Navigation: React.FC<NavigationProps> = ({ currentTab, onTabChange 
       badge: null,
     },
   ];
+
+  // In Guest mode, disable the Landlord hub section so it is not visible to guest browsers (Requirement 3)
+  const tabs = isGuest ? allTabs.filter(tab => tab.id !== 'landlord') : allTabs;
 
   return (
     <>
@@ -98,7 +101,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentTab, onTabChange 
 
       {/* Mobile Bottom Fixed Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg pb-safe">
-        <div className="grid grid-cols-5 h-14">
+        <div className={`grid ${tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-5'} h-14`}>
           {tabs.map(tab => {
             const Icon = tab.icon;
             const isActive = currentTab === tab.id;

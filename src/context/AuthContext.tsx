@@ -30,7 +30,14 @@ interface AuthContextType {
   isLoading: boolean;
   loginWithGoogle: () => Promise<boolean>;
   loginWithEmail: (email: string, password?: string) => Promise<boolean>;
-  signupWithEmail: (name: string, email: string, password?: string, role?: UserRole, phone?: string) => Promise<boolean>;
+  signupWithEmail: (
+    name: string,
+    email: string,
+    password?: string,
+    role?: UserRole,
+    phone?: string,
+    companyName?: string
+  ) => Promise<boolean>;
   updateUserProfile: (userUpdates: Partial<User>) => Promise<void>;
   updateUserRoleByAdmin: (targetUserId: string, newRole: UserRole) => Promise<void>;
   loginAsGuest: () => void;
@@ -250,7 +257,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password = 'Password@123',
     role: UserRole = 'tenant',
-    phone = '+263 77 '
+    phone = '+263 77 ',
+    companyName?: string
   ): Promise<boolean> => {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -262,6 +270,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newUser: User = {
         id: uid,
         name,
+        companyName: companyName?.trim() || undefined,
         email,
         phone,
         whatsappNumber: phone,
@@ -269,7 +278,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verified: cred.user.emailVerified,
         createdAt: Date.now(),
         city: 'Harare',
-        bio: `${finalRole.replace('_', ' ')} active on Comfort Housing.`,
+        bio: companyName?.trim()
+          ? `${companyName.trim()} - Registered Property Management company on Comfort Housing.`
+          : `${finalRole.replace('_', ' ')} active on Comfort Housing.`,
       };
 
       const cleanUser = sanitizeForFirestore(newUser);
@@ -313,6 +324,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const sanitizedUpdates = sanitizeForFirestore({
         name: updated.name,
+        companyName: updated.companyName || '',
         phone: updated.phone,
         whatsappNumber: updated.whatsappNumber || updated.phone,
         bio: updated.bio || '',
