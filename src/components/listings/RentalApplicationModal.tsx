@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Property, RentalApplication } from '../../types';
+import { Property, RentalApplication, NotificationItem } from '../../types';
 import { db } from '../../db/db';
-import { db as firestoreDb } from '../../db/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { offlineSyncService } from '../../services/offlineSync';
 import { useAuth } from '../../context/AuthContext';
-import { X, CheckCircle2, MessageCircle, Calendar, User, Phone, Mail, Users, Briefcase, DollarSign } from 'lucide-react';
+import { X, CheckCircle2, MessageCircle } from 'lucide-react';
 
 interface RentalApplicationModalProps {
   property: Property;
@@ -39,9 +39,41 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
   const [appliedSuccess, setAppliedSuccess] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Dynamic Landlord Contact Synchronization
+  const [activeLandlordPhone, setActiveLandlordPhone] = useState(property.landlordPhone);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLatestLandlordPhone = async () => {
+      try {
+        const localLandlord = await db.users.get(property.landlordId);
+        if (localLandlord && (localLandlord.whatsappNumber || localLandlord.phone)) {
+          if (isMounted) setActiveLandlordPhone(localLandlord.whatsappNumber || localLandlord.phone);
+          return;
+        }
+
+        const userSnap = await getDoc(doc(firestoreDb, 'users', property.landlordId));
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          const phone = data.whatsappNumber || data.phone;
+          if (phone && isMounted) {
+            setActiveLandlordPhone(phone);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch landlord current WhatsApp line:', e);
+      }
+    };
+
+    fetchLatestLandlordPhone();
+    return () => {
+      isMounted = false;
+    };
+  }, [property.landlordId, property.landlordPhone]);
+
   // Sync state if currentUser changes
   useEffect(() => {
-    if (currentUser && currentUser.id !== 'user_guest') {
+    if (currentUser && currentUser.id !== 'user_guest' && currentUser.id !== 'guest_explorer') {
       if (!applicantName) setApplicantName(currentUser.name);
       if (!applicantPhone) setApplicantPhone(currentUser.whatsappNumber || currentUser.phone);
       if (!applicantEmail && !currentUser.email.includes('guest@')) setApplicantEmail(currentUser.email);
@@ -54,7 +86,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
     e.preventDefault();
     setFormError(null);
 
-    // Validate mandatory fields: Name, Phone, Email, Move-in Date, Occupants, Employment, Message
+    // Validate mandatory fields
     if (!applicantName.trim()) {
       setFormError('Please enter your full name.');
       return;
@@ -76,7 +108,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
       return;
     }
     if (!employmentStatus.trim()) {
-      setFormError('Please specify your profession / employment status.');
+      setFormError('Please choose your employment status / profession.');
       return;
     }
     if (!message.trim()) {
@@ -85,7 +117,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
     }
 
     const incomeValue = monthlyIncomeUsd ? Number(monthlyIncomeUsd) : undefined;
-    const applicantId = currentUser?.id && currentUser.id !== 'user_guest'
+    const applicantId = currentUser?.id && currentUser.id !== 'user_guest' && currentUser.id !== 'guest_explorer'
       ? currentUser.id
       : `guest_applicant_${Date.now()}`;
 
@@ -107,29 +139,43 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
       appliedAt: Date.now(),
     };
 
-    // Save locally into IndexedDB applications table
-    await db.applications.add(newApplication);
+    const cleanApplication = sanitizeForFirestore(newApplication);
 
-    // Persist to Firestore if online, or queue for offline sync
+    // 1. Save application into IndexedDB applications table
+    await db.applications.put(cleanApplication);
+
+    // 2. Persist application to Firestore applications collection or queue
     try {
-      await setDoc(doc(firestoreDb, 'applications', newApplication.id), newApplication);
+      await setDoc(doc(firestoreDb, 'applications', newApplication.id), cleanApplication);
     } catch (err) {
       console.warn('Could not post application to Firestore online, enqueued:', err);
-      await offlineSyncService.enqueueAction('submit_application', newApplication);
+      await offlineSyncService.enqueueAction('submit_application', cleanApplication);
     }
 
-    // Record in-app notification for the landlord's dashboard
-    await db.notifications.add({
-      id: `notif_${Date.now()}`,
+    // 3. Create real-time in-app notification for the landlord
+    const notifId = `notif_${Date.now()}`;
+    const landlordNotification: NotificationItem = {
+      id: notifId,
       userId: property.landlordId,
-      title: 'New Rental Application Received',
-      message: `${applicantName.trim()} applied for "${property.name}" (${occupantsCount} occupant(s), move-in: ${moveInDate}, profession: ${employmentStatus}).`,
+      title: `New Rental Application for ${property.name}`,
+      message: `${applicantName.trim()} applied for "${property.name}". Move-in: ${moveInDate}. Employment: ${employmentStatus.trim()}. Occupants: ${occupantsCount}. Contact: ${applicantPhone.trim()}${incomeValue ? `, Income: $${incomeValue} USD` : ''}. Message: "${message.trim()}".`,
       type: 'application_update',
       read: false,
       timestamp: Date.now(),
-    });
+      actionUrl: 'landlord',
+    };
 
-    // Format WhatsApp message with full applicant and tenancy dossier
+    // Save locally to IndexedDB notifications table
+    await db.notifications.put(landlordNotification);
+
+    // Persist in-app notification to Firestore so the landlord's device receives real-time alert
+    try {
+      await setDoc(doc(firestoreDb, 'notifications', notifId), sanitizeForFirestore(landlordNotification));
+    } catch (notifErr) {
+      console.warn('Could not post notification to Firestore:', notifErr);
+    }
+
+    // 4. Format WhatsApp message with full applicant and tenancy dossier
     const rentBasisLabel = property.rentBasis ? ` ${property.rentBasis}` : '/month';
     const waText =
       `*Rental Application - Comfort Housing Hub Zimbabwe*\n\n` +
@@ -148,7 +194,11 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
       `*Message from Applicant:*\n"${message.trim()}"\n\n` +
       `_Sent via Comfort Housing & Rental Hub (Offline-First Zimbabwe Platform)_`;
 
-    const cleanLandlordPhone = property.landlordPhone.replace(/\D/g, '');
+    // Normalize phone number for WhatsApp
+    let cleanLandlordPhone = activeLandlordPhone.replace(/\D/g, '');
+    if (cleanLandlordPhone.startsWith('0') && cleanLandlordPhone.length === 10) {
+      cleanLandlordPhone = '263' + cleanLandlordPhone.substring(1);
+    }
     const waUrl = `https://wa.me/${cleanLandlordPhone}?text=${encodeURIComponent(waText)}`;
 
     // Open WhatsApp link cleanly
@@ -203,7 +253,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
               Application Submitted!
             </h4>
             <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-              Your rental application has been saved to the database, queued, and opened on WhatsApp to contact <strong>{property.landlordName}</strong>. An in-app alert has also been sent to the landlord’s dashboard.
+              Your rental application has been saved to the database, opened on WhatsApp to <strong>{property.landlordName}</strong>, and an in-app notification has been dispatched to the landlord’s dashboard.
             </p>
           </div>
         ) : (
@@ -217,7 +267,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Full Name
+                  Full Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -230,7 +280,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Phone Number
+                  Phone Number (WhatsApp) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -245,7 +295,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Email Address
+                  Email Address <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -258,7 +308,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Proposed Move-In Date
+                  Proposed Move-In Date <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -273,7 +323,7 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Number of Occupants
+                  Number of Occupants <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -302,20 +352,25 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
 
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Employment / Profession
+                Employment / Profession <span className="text-rose-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 required
                 value={employmentStatus}
                 onChange={e => setEmploymentStatus(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
-              />
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs bg-white text-slate-800 font-medium cursor-pointer"
+              >
+                <option value="">Select employment status...</option>
+                <option value="Self Employed (Own Business)">Self Employed (Own Business)</option>
+                <option value="Formally Employed">Formally Employed</option>
+                <option value="Unemployed">Unemployed</option>
+                <option value="Choose Not to Say">Choose Not to Say</option>
+              </select>
             </div>
 
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Message to Landlord
+                Message to Landlord <span className="text-rose-500">*</span>
               </label>
               <textarea
                 rows={2}
@@ -326,12 +381,16 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
               />
             </div>
 
-            {/* Landlord Contact Info Strip */}
-            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px] text-slate-600">
+            {/* Landlord Contact Info Strip (Dynamically Synchronized) */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-slate-600">
               <span className="font-semibold text-slate-800">
                 Landlord: {property.landlordName}
               </span>
-              <span>WhatsApp: {property.landlordPhone}</span>
+              <span className="text-emerald-800 font-medium flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>WhatsApp Direct:</span>
+                <strong className="text-emerald-950 font-bold">{activeLandlordPhone}</strong>
+              </span>
             </div>
 
             <div className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">

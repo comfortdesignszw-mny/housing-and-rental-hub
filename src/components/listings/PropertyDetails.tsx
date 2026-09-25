@@ -91,7 +91,13 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
     }
   };
 
-  const cleanPhone = property.landlordPhone.replace(/\D/g, '');
+  // Live landlord profile subscription for real-time updated WhatsApp & phone contacts
+  const landlordUser = useLiveQuery(() => db.users.get(property.landlordId), [property.landlordId]);
+  const activeLandlordPhone = landlordUser?.whatsappNumber || landlordUser?.phone || property.landlordPhone;
+  let cleanPhone = activeLandlordPhone.replace(/\D/g, '');
+  if (cleanPhone.startsWith('0') && cleanPhone.length === 10) {
+    cleanPhone = '263' + cleanPhone.substring(1);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
@@ -402,6 +408,9 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
                     <span>Estimated Total Move-in:</span>
                     <span className="text-emerald-800">${totalMoveInCost}</span>
                   </div>
+                  <p className="text-[11px] text-slate-500 italic text-center pt-2 border-t border-dashed border-slate-200 mt-1">
+                    In some cases, agents fees may apply.
+                  </p>
                 </div>
               </div>
             )}
@@ -417,7 +426,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
                 {property.landlordName}
               </h4>
               <p className="text-xs text-slate-300 mt-0.5">
-                Phone: {property.landlordPhone}
+                Phone: {activeLandlordPhone}
               </p>
             </div>
 

@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { UserRole, User } from '../../types';
 import { compressImage } from '../../services/imageCompression';
+import { db as firestoreDb } from '../../db/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 interface UserProfileProps {
   onOpenAuthModal?: () => void;
@@ -94,14 +96,36 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => 
     e.preventDefault();
     if (!currentUser) return;
 
+    const newPhone = editPhone.trim();
+    const newWhatsapp = editWhatsapp.trim() || newPhone;
+
     await updateUserProfile({
       name: editName.trim(),
-      phone: editPhone.trim(),
-      whatsappNumber: editWhatsapp.trim(),
+      phone: newPhone,
+      whatsappNumber: newWhatsapp,
       city: editCity.trim(),
       bio: editBio.trim(),
       avatar: editAvatar.trim(),
     });
+
+    // Sync updated WhatsApp number to all properties published by this user
+    try {
+      const userProps = await db.properties.where('landlordId').equals(currentUser.id).toArray();
+      for (const p of userProps) {
+        await db.properties.update(p.id, {
+          landlordPhone: newWhatsapp || newPhone,
+        });
+        try {
+          await updateDoc(doc(firestoreDb, 'properties', p.id), {
+            landlordPhone: newWhatsapp || newPhone,
+          });
+        } catch (propErr) {
+          console.warn('Could not sync property landlord phone to Firestore:', propErr);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not sync landlord phone across properties:', err);
+    }
 
     setShowEditProfileModal(false);
     showToast('Profile details & WhatsApp communications line updated successfully!');
@@ -511,9 +535,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => 
           >
             Clear Local Cache
           </button>
-          <span className="text-[11px] text-slate-400">
-            Connected to Firestore: {import.meta.env.VITE_APP_ID || 'gen-lang-client-0045594701'}
-          </span>
         </div>
       </div>
 
@@ -595,15 +616,34 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => 
                     type="tel"
                     required
                     value={editPhone}
-                    onChange={e => setEditPhone(e.target.value)}
+                    onChange={e => {
+                      const newPhone = e.target.value;
+                      const prevPhone = editPhone;
+                      setEditPhone(newPhone);
+                      // Auto-suggest the same number for WhatsApp if empty or previously matching
+                      if (!editWhatsapp || editWhatsapp === prevPhone || editWhatsapp === '+263 77 ') {
+                        setEditWhatsapp(newPhone);
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-emerald-800 mb-1">
-                    WhatsApp Communications Number
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-emerald-800">
+                      WhatsApp Communications Number
+                    </label>
+                    {editPhone && editWhatsapp !== editPhone && (
+                      <button
+                        type="button"
+                        onClick={() => setEditWhatsapp(editPhone)}
+                        className="text-[10px] text-emerald-700 hover:text-emerald-900 font-semibold underline cursor-pointer"
+                      >
+                        Same as phone
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="tel"
                     required

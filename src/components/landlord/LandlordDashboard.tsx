@@ -740,7 +740,10 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
           ) : (
             <div className="space-y-3">
               {applications.map(app => {
-                const cleanPhone = app.applicantPhone.replace(/\D/g, '');
+                let cleanPhone = app.applicantPhone.replace(/\D/g, '');
+                if (cleanPhone.startsWith('0') && cleanPhone.length === 10) {
+                  cleanPhone = '263' + cleanPhone.substring(1);
+                }
                 const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
                   `Hello ${app.applicantName}, I am following up on your rental application for "${app.propertyName}" on Comfort Housing Hub.`
                 )}`;
