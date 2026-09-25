@@ -7,6 +7,8 @@ import {
 } from '../../data/zimbabweLocations';
 import { compressImage } from '../../services/imageCompression';
 import { db } from '../../db/db';
+import { db as firestoreDb } from '../../db/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { offlineSyncService } from '../../services/offlineSync';
 import {
@@ -232,10 +234,20 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
     if (propertyToEdit) {
       await db.properties.put(propertyData);
-      await offlineSyncService.enqueueAction('update_listing', propertyData);
+      try {
+        await setDoc(doc(firestoreDb, 'properties', propertyId), propertyData);
+      } catch (err) {
+        console.warn('Could not update Firestore listing online, queued:', err);
+        await offlineSyncService.enqueueAction('update_listing', propertyData);
+      }
     } else {
       await db.properties.add(propertyData);
-      await offlineSyncService.enqueueAction('create_listing', propertyData);
+      try {
+        await setDoc(doc(firestoreDb, 'properties', propertyId), propertyData);
+      } catch (err) {
+        console.warn('Could not post Firestore listing online, queued:', err);
+        await offlineSyncService.enqueueAction('create_listing', propertyData);
+      }
     }
 
     // Add local notification

@@ -1,0 +1,331 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control (RBAC)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "whatsappNumber": { "type": "string", "maxLength": 30 },
+        "role": { "type": "string", "enum": ["tenant", "landlord", "property_manager", "admin", "guest"] },
+        "avatar": { "type": "string", "maxLength": 500000 },
+        "verified": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "city": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "name", "email", "role", "createdAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Trusted admin identity for server-side rule verification",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 150 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Real estate rental listing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "landlordId": { "type": "string", "maxLength": 128 },
+        "landlordName": { "type": "string", "maxLength": 100 },
+        "landlordPhone": { "type": "string", "maxLength": 30 },
+        "landlordEmail": { "type": "string", "maxLength": 150 },
+        "name": { "type": "string", "maxLength": 150 },
+        "propertyType": { "type": "string", "maxLength": 50 },
+        "rentUsd": { "type": "number" },
+        "rentZig": { "type": "number" },
+        "rentBasis": { "type": "string", "maxLength": 30 },
+        "depositUsd": { "type": "number" },
+        "province": { "type": "string", "maxLength": 50 },
+        "city": { "type": "string", "maxLength": 50 },
+        "town": { "type": "string", "maxLength": 50 },
+        "suburb": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 200 },
+        "bedrooms": { "type": "number" },
+        "bathrooms": { "type": "number" },
+        "roomsAvailable": { "type": "number" },
+        "photos": { "type": "array" },
+        "amenities": { "type": "array" },
+        "description": { "type": "string", "maxLength": 5000 },
+        "availability": { "type": "string", "maxLength": 50 },
+        "availableDate": { "type": "string", "maxLength": 30 },
+        "occupiedAt": { "type": "number" },
+        "gpsLat": { "type": "number" },
+        "gpsLng": { "type": "number" },
+        "featured": { "type": "boolean" },
+        "views": { "type": "number" },
+        "rating": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "landlordId", "name", "propertyType", "rentUsd", "city", "suburb", "createdAt", "updatedAt"]
+    },
+    "RoommateProfile": {
+      "title": "RoommateProfile",
+      "description": "Profile for roommate finding and matching",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "age": { "type": "number" },
+        "gender": { "type": "string", "maxLength": 20 },
+        "occupation": { "type": "string", "maxLength": 100 },
+        "budgetUsd": { "type": "number" },
+        "studentStatus": { "type": "string", "maxLength": 50 },
+        "universityOrWorkplace": { "type": "string", "maxLength": 150 },
+        "preferredProvinces": { "type": "array" },
+        "preferredCities": { "type": "array" },
+        "preferredSuburbs": { "type": "array" },
+        "accommodationTypeWanted": { "type": "array" },
+        "moveInDate": { "type": "string", "maxLength": 30 },
+        "cleanliness": { "type": "string", "maxLength": 30 },
+        "sleepSchedule": { "type": "string", "maxLength": 30 },
+        "smokingPreference": { "type": "string", "maxLength": 30 },
+        "drinkingPreference": { "type": "string", "maxLength": 30 },
+        "guestPolicy": { "type": "string", "maxLength": 30 },
+        "petTolerance": { "type": "string", "maxLength": 30 },
+        "bio": { "type": "string", "maxLength": 2000 },
+        "avatar": { "type": "string", "maxLength": 500000 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 150 },
+        "verified": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "name", "budgetUsd", "createdAt"]
+    },
+    "RentalApplication": {
+      "title": "RentalApplication",
+      "description": "Rental application from tenant to landlord",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "propertyId": { "type": "string", "maxLength": 128 },
+        "propertyName": { "type": "string", "maxLength": 150 },
+        "landlordId": { "type": "string", "maxLength": 128 },
+        "applicantId": { "type": "string", "maxLength": 128 },
+        "applicantName": { "type": "string", "maxLength": 100 },
+        "applicantPhone": { "type": "string", "maxLength": 30 },
+        "applicantEmail": { "type": "string", "maxLength": 150 },
+        "proposedMoveInDate": { "type": "string", "maxLength": 30 },
+        "occupantsCount": { "type": "number" },
+        "employmentStatus": { "type": "string", "maxLength": 100 },
+        "monthlyIncomeUsd": { "type": "number" },
+        "message": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "appliedAt": { "type": "number" }
+      },
+      "required": ["id", "propertyId", "landlordId", "applicantId", "status", "appliedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "WhatsApp-like peer-to-peer encrypted chat message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderRole": { "type": "string", "maxLength": 30 },
+        "recipientId": { "type": "string", "maxLength": 128 },
+        "recipientName": { "type": "string", "maxLength": 100 },
+        "content": { "type": "string", "maxLength": 10000 },
+        "encryptedContent": { "type": "string", "maxLength": 20000 },
+        "photoUrl": { "type": "string", "maxLength": 500000 },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read", "queued"] },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "conversationId", "senderId", "recipientId", "status", "timestamp"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Chat thread summary metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "participantIds": { "type": "array" },
+        "participantNames": { "type": "object" },
+        "lastMessage": { "type": "string", "maxLength": 500 },
+        "lastMessageTime": { "type": "number" },
+        "unreadCount": { "type": "number" },
+        "propertyId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "participantIds", "lastMessageTime"]
+    },
+    "Tenant": {
+      "title": "Tenant",
+      "description": "Tenancy record managed by landlord",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "landlordId": { "type": "string", "maxLength": 128 },
+        "propertyId": { "type": "string", "maxLength": 128 },
+        "propertyName": { "type": "string", "maxLength": 150 },
+        "unitNumber": { "type": "string", "maxLength": 50 },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 150 },
+        "moveInDate": { "type": "string", "maxLength": 30 },
+        "depositPaid": { "type": "number" },
+        "rentAmount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "leaseEnd": { "type": "string", "maxLength": 30 },
+        "emergencyContactName": { "type": "string", "maxLength": 100 },
+        "emergencyContactPhone": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "landlordId", "propertyId", "name", "status", "createdAt"]
+    },
+    "RentPayment": {
+      "title": "RentPayment",
+      "description": "Rent payment record and receipt",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "propertyId": { "type": "string", "maxLength": 128 },
+        "propertyName": { "type": "string", "maxLength": 150 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "tenantName": { "type": "string", "maxLength": 100 },
+        "landlordId": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "dueDate": { "type": "string", "maxLength": 30 },
+        "paymentDate": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "reference": { "type": "string", "maxLength": 100 },
+        "receiptNumber": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "propertyId", "tenantId", "landlordId", "amount", "dueDate", "status", "createdAt"]
+    },
+    "Lease": {
+      "title": "Lease",
+      "description": "Lease agreement terms and dates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "propertyId": { "type": "string", "maxLength": 128 },
+        "propertyName": { "type": "string", "maxLength": 150 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "tenantName": { "type": "string", "maxLength": 100 },
+        "landlordId": { "type": "string", "maxLength": 128 },
+        "unitNumber": { "type": "string", "maxLength": 50 },
+        "startDate": { "type": "string", "maxLength": 30 },
+        "endDate": { "type": "string", "maxLength": 30 },
+        "monthlyRent": { "type": "number" },
+        "deposit": { "type": "number" },
+        "terms": { "type": "string", "maxLength": 5000 },
+        "renewalDate": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 },
+        "documentNotes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "propertyId", "tenantId", "landlordId", "startDate", "endDate", "status", "createdAt"]
+    },
+    "MaintenanceRequest": {
+      "title": "MaintenanceRequest",
+      "description": "Property repair and maintenance ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "propertyId": { "type": "string", "maxLength": 128 },
+        "propertyName": { "type": "string", "maxLength": 150 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "tenantName": { "type": "string", "maxLength": 100 },
+        "landlordId": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 50 },
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "urgency": { "type": "string", "maxLength": 20 },
+        "status": { "type": "string", "maxLength": 30 },
+        "photos": { "type": "array" },
+        "reportedAt": { "type": "number" },
+        "resolvedAt": { "type": "number" },
+        "estimatedCost": { "type": "number" },
+        "assignedTo": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "propertyId", "landlordId", "tenantId", "title", "category", "urgency", "status", "reportedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User in-app notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "type": { "type": "string", "maxLength": 50 },
+        "read": { "type": "boolean" },
+        "timestamp": { "type": "number" },
+        "actionUrl": { "type": "string", "maxLength": 250 }
+      },
+      "required": ["id", "userId", "title", "message", "type", "read", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts and RBAC roles"
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "Server-side admin records"
+    },
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Rental property listings"
+    },
+    "/roommateProfiles/{profileId}": {
+      "schema": "RoommateProfile",
+      "description": "Roommate seeking profiles"
+    },
+    "/applications/{applicationId}": {
+      "schema": "RentalApplication",
+      "description": "Tenant property applications"
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Direct chat messages with encryption"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Conversation threads"
+    },
+    "/tenants/{tenantId}": {
+      "schema": "Tenant",
+      "description": "Tenancies"
+    },
+    "/rentPayments/{paymentId}": {
+      "schema": "RentPayment",
+      "description": "Rent payment receipts"
+    },
+    "/leases/{leaseId}": {
+      "schema": "Lease",
+      "description": "Lease documents"
+    },
+    "/maintenanceRequests/{requestId}": {
+      "schema": "MaintenanceRequest",
+      "description": "Maintenance tickets"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    }
+  }
+}

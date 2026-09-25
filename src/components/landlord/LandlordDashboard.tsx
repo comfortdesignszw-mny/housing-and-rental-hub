@@ -44,7 +44,7 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
   onOpenCreateListing,
   onStartChat,
 }) => {
-  const { currentUser, role, isGuest, switchUserRole } = useAuth();
+  const { currentUser, role, isGuest } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<
     'overview' | 'properties' | 'applications' | 'tenants' | 'rent' | 'leases' | 'maintenance'
   >('overview');
@@ -256,10 +256,10 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => switchUserRole('landlord')}
+            onClick={onOpenCreateListing}
             className="px-3.5 py-1.5 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-xl text-xs transition cursor-pointer self-start sm:self-auto shrink-0"
           >
-            Switch to Landlord Account
+            Sign In / Add Property
           </button>
         </div>
       )}

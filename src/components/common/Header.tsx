@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { PWAInstallButton } from './PWAInstallButton';
-import { Bell, Home, ChevronDown, Check, ShieldCheck, UserCheck } from 'lucide-react';
+import { Bell, Home, ChevronDown, ShieldCheck, LogOut, LogIn, User, CheckCircle2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import { UserRole } from '../../types';
@@ -10,15 +10,17 @@ import { UserRole } from '../../types';
 interface HeaderProps {
   onOpenNotifications: () => void;
   onOpenCreateListing: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   onOpenCreateListing,
+  onOpenAuthModal,
 }) => {
-  const { currentUser, role, isGuest, switchUserRole, switchUser, loginAsGuest, allDemoUsers } = useAuth();
+  const { currentUser, role, isGuest, isAuthenticated, logout } = useAuth();
   const isOnline = useOnlineStatus();
-  const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   const unreadCount = useLiveQuery(
     () => db.notifications.where('read').equals(0 as any).count(),
@@ -26,15 +28,15 @@ export const Header: React.FC<HeaderProps> = ({
   ) || 0;
 
   const roleLabels: Record<UserRole, { label: string; badgeColor: string }> = {
-    tenant: { label: 'Tenant', badgeColor: 'bg-blue-100 text-blue-800' },
-    landlord: { label: 'Landlord', badgeColor: 'bg-emerald-100 text-emerald-800' },
-    property_manager: { label: 'Property Manager', badgeColor: 'bg-purple-100 text-purple-800' },
-    admin: { label: 'Admin', badgeColor: 'bg-amber-100 text-amber-900' },
-    guest: { label: 'Guest (Browse Only)', badgeColor: 'bg-slate-100 text-slate-700 font-semibold' },
+    tenant: { label: 'Tenant', badgeColor: 'bg-blue-100 text-blue-800 border-blue-200' },
+    landlord: { label: 'Landlord', badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+    property_manager: { label: 'Property Manager', badgeColor: 'bg-purple-100 text-purple-800 border-purple-200' },
+    admin: { label: 'Administrator', badgeColor: 'bg-amber-100 text-amber-900 border-amber-300 font-bold' },
+    guest: { label: 'Guest', badgeColor: 'bg-slate-100 text-slate-700 border-slate-200' },
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
         {/* Brand */}
         <div className="flex items-center gap-2.5">
@@ -51,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <p className="text-[10px] text-slate-500 hidden sm:block -mt-0.5">
-              Rental & Roommate Hub • Offline-First
+              Real World Rentals • Cloud Persistence & Offline Cache
             </p>
           </div>
         </div>
@@ -61,8 +63,8 @@ export const Header: React.FC<HeaderProps> = ({
           {/* PWA Install Button */}
           <PWAInstallButton />
 
-          {/* Quick Create Listing button for Landlords */}
-          {(role === 'landlord' || role === 'property_manager') && (
+          {/* Quick Create Listing button for Landlords & Admins */}
+          {(role === 'landlord' || role === 'property_manager' || role === 'admin') && (
             <button
               onClick={onOpenCreateListing}
               className="hidden md:flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs transition"
@@ -78,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50'
                 : 'bg-amber-50 text-amber-800 border border-amber-200'
             }`}
-            title={isOnline ? 'Online - Database ready' : 'Working offline without internet'}
+            title={isOnline ? 'Online - Connected to Firestore' : 'Offline - Queuing changes locally in IndexedDB'}
           >
             <span
               className={`w-1.5 h-1.5 rounded-full ${
@@ -102,12 +104,12 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Role Switcher Menu */}
+          {/* Authenticated User on Top Bar (No profile switching toggle) */}
           <div className="relative">
             <button
-              onClick={() => setShowRoleMenu(!showRoleMenu)}
-              className="flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-xl border border-slate-200 hover:bg-slate-50 transition"
-              title="Switch user role or persona"
+              onClick={() => setShowAccountMenu(!showAccountMenu)}
+              className="flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-xl border border-slate-200 hover:bg-slate-50 transition cursor-pointer"
+              title="Authenticated User Profile"
             >
               {currentUser?.avatar ? (
                 <img
@@ -117,11 +119,16 @@ export const Header: React.FC<HeaderProps> = ({
                 />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center justify-center">
-                  {currentUser?.name.charAt(0) || 'U'}
+                  {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'G'}
                 </div>
               )}
+              <div className="text-left hidden sm:block max-w-[100px] truncate">
+                <span className="text-xs font-semibold text-slate-800 block truncate leading-tight">
+                  {currentUser?.name || 'Guest User'}
+                </span>
+              </div>
               <span
-                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md border ${
                   roleLabels[role]?.badgeColor || 'bg-slate-100 text-slate-700'
                 }`}
               >
@@ -130,90 +137,74 @@ export const Header: React.FC<HeaderProps> = ({
               <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
 
-            {/* Dropdown Menu */}
-            {showRoleMenu && (
+            {/* Account Info & Session Dropdown */}
+            {showAccountMenu && (
               <div
-                className="absolute right-0 mt-2 w-64 rounded-2xl bg-white p-2 shadow-xl border border-slate-100 z-50 animate-in fade-in zoom-in-95 duration-150"
+                className="absolute right-0 mt-2 w-64 rounded-2xl bg-white p-2.5 shadow-xl border border-slate-100 z-50 animate-in fade-in zoom-in-95 duration-150"
                 onClick={e => e.stopPropagation()}
               >
                 <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                  <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-                    Current Persona
-                  </p>
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                    {role === 'admin' ? (
+                      <span className="flex items-center gap-1 text-amber-700">
+                        <ShieldCheck className="w-3 h-3" /> System Administrator
+                      </span>
+                    ) : (
+                      <span>Authenticated Account</span>
+                    )}
+                  </div>
                   <p className="text-xs font-bold text-slate-900 truncate">
-                    {currentUser?.name}
+                    {currentUser?.name || 'Guest Explorer'}
                   </p>
                   <p className="text-[11px] text-slate-500 truncate">
-                    {currentUser?.phone} • {currentUser?.city || 'Harare'}
+                    {currentUser?.email || 'guest@comfort.zw'}
                   </p>
-                </div>
-
-                <div className="py-1">
-                  <p className="px-3 text-[10px] font-semibold text-slate-400 uppercase mb-1">
-                    Switch Test Persona / Role
-                  </p>
-                  {allDemoUsers.map(u => (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        switchUser(u.id);
-                        setShowRoleMenu(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl text-left transition ${
-                        currentUser?.id === u.id
-                          ? 'bg-emerald-50 text-emerald-900 font-semibold'
-                          : 'hover:bg-slate-50 text-slate-700'
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                        roleLabels[role]?.badgeColor
                       }`}
                     >
-                      <div className="truncate">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate">{u.name}</span>
-                          <span
-                            className={`text-[9px] px-1 py-0.2 rounded font-medium ${
-                              roleLabels[u.role]?.badgeColor
-                            }`}
-                          >
-                            {u.role.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </div>
-                      {currentUser?.id === u.id && (
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      )}
-                    </button>
-                  ))}
-
-                  {/* Browse as Guest option */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loginAsGuest();
-                      setShowRoleMenu(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl text-left transition ${
-                      isGuest
-                        ? 'bg-emerald-50 text-emerald-900 font-semibold'
-                        : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <div className="truncate">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate">Guest Explorer</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-slate-100 text-slate-700">
-                          Guest (No Account)
-                        </span>
-                      </div>
-                    </div>
-                    {isGuest && (
-                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ROLE: {role.toUpperCase()}
+                    </span>
+                    {currentUser?.verified && (
+                      <span className="text-[9px] text-emerald-700 font-semibold flex items-center gap-0.5">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Verified
+                      </span>
                     )}
-                  </button>
+                  </div>
                 </div>
 
-                <div className="border-t border-slate-100 pt-2 mt-1 px-2">
-                  <p className="text-[10px] text-slate-400 text-center">
-                    Offline session saved locally
-                  </p>
+                <div className="py-1 space-y-1">
+                  {isAuthenticated ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAccountMenu(false);
+                        logout();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-xl text-rose-600 hover:bg-rose-50 font-semibold transition text-left cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAccountMenu(false);
+                        if (onOpenAuthModal) onOpenAuthModal();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition text-left cursor-pointer"
+                    >
+                      <LogIn className="w-3.5 h-3.5" />
+                      <span>Sign In / Register</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-100 pt-2 mt-1 px-2 text-[10px] text-slate-400 text-center">
+                  Protected with Firebase Auth & RBAC
                 </div>
               </div>
             )}

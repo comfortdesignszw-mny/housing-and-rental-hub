@@ -1,0 +1,347 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all unspecified operations
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'comfort.designszw@gmail.com' && isVerifiedEmail())
+      );
+    }
+
+    // 1. Users collection
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'name', 'email', 'phone', 'whatsappNumber', 'role', 'avatar', 'verified', 'createdAt', 'bio', 'city']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.email is string && data.email.size() <= 150 &&
+        data.role in ['tenant', 'landlord', 'property_manager', 'admin', 'guest'] &&
+        data.createdAt is number &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+        (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30)) &&
+        (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500000)) &&
+        (!('verified' in data) || (data.verified is bool)) &&
+        (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
+        (!('city' in data) || (data.city is string && data.city.size() <= 100));
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      // Admin can list users to view registered users and their roles
+      allow list: if isAdmin();
+      
+      // Create user: Owner must match auth uid; role cannot be self-assigned to admin unless user is authorized bootstrap email
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUser(incoming()) && (
+        (incoming().role != 'admin') || (request.auth.token.email == 'comfort.designszw@gmail.com')
+      );
+
+      // Update user: Owner can update profile fields, but only Admin can change role
+      allow update: if isSignedIn() && isValidId(userId) && (
+        isAdmin() ||
+        (
+          isOwner(userId) &&
+          isValidUser(incoming()) &&
+          incoming().id == existing().id &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().role == existing().role &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'whatsappNumber', 'bio', 'city', 'avatar'])
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // 2. Admins collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 3. Properties collection
+    function isValidProperty(data) {
+      return data.keys().hasAll(['id', 'landlordId', 'name', 'propertyType', 'rentUsd', 'city', 'suburb', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.landlordId is string && data.landlordId.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+        data.propertyType is string && data.propertyType.size() <= 50 &&
+        data.rentUsd is number && data.rentUsd >= 0 &&
+        data.city is string && data.city.size() <= 50 &&
+        data.suburb is string && data.suburb.size() <= 100 &&
+        data.createdAt is number && data.updatedAt is number &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 5000)) &&
+        (!('photos' in data) || (data.photos is list && data.photos.size() <= 20)) &&
+        (!('amenities' in data) || (data.amenities is list && data.amenities.size() <= 30));
+    }
+
+    match /properties/{propertyId} {
+      // Public listings can be viewed/listed by any authenticated user or guests
+      allow get, list: if true;
+
+      allow create: if isSignedIn() && isValidId(propertyId) && isValidProperty(incoming()) &&
+        incoming().landlordId == request.auth.uid;
+
+      allow update: if isSignedIn() && isValidId(propertyId) && isValidProperty(incoming()) && (
+        isAdmin() ||
+        (
+          existing().landlordId == request.auth.uid &&
+          incoming().landlordId == existing().landlordId &&
+          incoming().createdAt == existing().createdAt
+        )
+      );
+
+      allow delete: if isSignedIn() && isValidId(propertyId) && (
+        isAdmin() || existing().landlordId == request.auth.uid
+      );
+    }
+
+    // 4. Roommate Profiles
+    function isValidRoommate(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'budgetUsd', 'createdAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.name is string && data.name.size() <= 100 &&
+        data.budgetUsd is number && data.budgetUsd >= 0 &&
+        data.createdAt is number;
+    }
+
+    match /roommateProfiles/{profileId} {
+      allow get, list: if true;
+
+      allow create: if isSignedIn() && isValidId(profileId) && isValidRoommate(incoming()) &&
+        incoming().userId == request.auth.uid;
+
+      allow update: if isSignedIn() && isValidId(profileId) && isValidRoommate(incoming()) && (
+        isAdmin() ||
+        (
+          existing().userId == request.auth.uid &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt
+        )
+      );
+
+      allow delete: if isSignedIn() && isValidId(profileId) && (
+        isAdmin() || existing().userId == request.auth.uid
+      );
+    }
+
+    // 5. Rental Applications
+    function isValidApplication(data) {
+      return data.keys().hasAll(['id', 'propertyId', 'landlordId', 'applicantId', 'status', 'appliedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.propertyId is string && data.propertyId.size() <= 128 &&
+        data.landlordId is string && data.landlordId.size() <= 128 &&
+        data.applicantId is string && data.applicantId.size() <= 128 &&
+        data.status in ['pending', 'approved', 'rejected'] &&
+        data.appliedAt is number;
+    }
+
+    match /applications/{applicationId} {
+      allow get: if isSignedIn() && (
+        resource.data.applicantId == request.auth.uid ||
+        resource.data.landlordId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        resource.data.applicantId == request.auth.uid ||
+        resource.data.landlordId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) &&
+        incoming().applicantId == request.auth.uid &&
+        incoming().status == 'pending';
+
+      allow update: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) && (
+        isAdmin() ||
+        (
+          // Landlord can approve/reject
+          existing().landlordId == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status'])
+        ) ||
+        (
+          // Applicant can update details while pending
+          existing().applicantId == request.auth.uid &&
+          existing().status == 'pending' &&
+          incoming().applicantId == existing().applicantId &&
+          incoming().status == 'pending'
+        )
+      );
+
+      allow delete: if isSignedIn() && (
+        isAdmin() || existing().applicantId == request.auth.uid
+      );
+    }
+
+    // 6. Direct Messages (WhatsApp-like Realtime Chat)
+    function isValidMessage(data) {
+      return data.keys().hasAll(['id', 'conversationId', 'senderId', 'recipientId', 'status', 'timestamp']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.conversationId is string && data.conversationId.size() <= 128 &&
+        data.senderId is string && data.senderId.size() <= 128 &&
+        data.recipientId is string && data.recipientId.size() <= 128 &&
+        data.status in ['sent', 'delivered', 'read', 'queued'] &&
+        data.timestamp is number &&
+        (!('content' in data) || (data.content is string && data.content.size() <= 10000)) &&
+        (!('encryptedContent' in data) || (data.encryptedContent is string && data.encryptedContent.size() <= 20000)) &&
+        (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500000));
+    }
+
+    match /messages/{messageId} {
+      allow get: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.recipientId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.recipientId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() && isValidId(messageId) && isValidMessage(incoming()) &&
+        incoming().senderId == request.auth.uid;
+
+      allow update: if isSignedIn() && isValidId(messageId) && (
+        isAdmin() ||
+        (
+          // Recipient can mark status as 'delivered' or 'read' (read receipts)
+          existing().recipientId == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+          incoming().status in ['delivered', 'read']
+        )
+      );
+
+      allow delete: if isAdmin() || (isSignedIn() && existing().senderId == request.auth.uid);
+    }
+
+    // 7. Conversations
+    match /conversations/{conversationId} {
+      allow get: if isSignedIn() && (
+        resource.data.participantIds.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        resource.data.participantIds.hasAny([request.auth.uid]) ||
+        isAdmin()
+      );
+
+      allow create, update: if isSignedIn() && isValidId(conversationId) && (
+        isAdmin() ||
+        incoming().participantIds.hasAny([request.auth.uid])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // 8. Tenants
+    match /tenants/{tenantId} {
+      allow read: if isSignedIn() && (
+        resource.data.landlordId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create, update, delete: if isSignedIn() && (
+        isAdmin() ||
+        (incoming().landlordId == request.auth.uid) ||
+        (resource != null && resource.data.landlordId == request.auth.uid)
+      );
+    }
+
+    // 9. Rent Payments
+    match /rentPayments/{paymentId} {
+      allow read: if isSignedIn() && (
+        resource.data.landlordId == request.auth.uid ||
+        resource.data.tenantId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create, update, delete: if isSignedIn() && (
+        isAdmin() ||
+        (incoming().landlordId == request.auth.uid) ||
+        (resource != null && resource.data.landlordId == request.auth.uid)
+      );
+    }
+
+    // 10. Leases
+    match /leases/{leaseId} {
+      allow read: if isSignedIn() && (
+        resource.data.landlordId == request.auth.uid ||
+        resource.data.tenantId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create, update, delete: if isSignedIn() && (
+        isAdmin() ||
+        (incoming().landlordId == request.auth.uid) ||
+        (resource != null && resource.data.landlordId == request.auth.uid)
+      );
+    }
+
+    // 11. Maintenance Requests
+    match /maintenanceRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.landlordId == request.auth.uid ||
+        resource.data.tenantId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() && isValidId(requestId) && (
+        incoming().tenantId == request.auth.uid ||
+        incoming().landlordId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        existing().landlordId == request.auth.uid ||
+        existing().tenantId == request.auth.uid
+      );
+
+      allow delete: if isAdmin() || (isSignedIn() && existing().landlordId == request.auth.uid);
+    }
+
+    // 12. Notifications
+    match /notifications/{notificationId} {
+      allow read, update, delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn();
+    }
+  }
+}

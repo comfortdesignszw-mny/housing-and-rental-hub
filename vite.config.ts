@@ -15,7 +15,7 @@ export default defineConfig(() => {
         manifest: {
           id: '/',
           name: 'Comfort Housing and Rental Hub',
-          short_name: 'ComfortHub',
+          short_name: 'Comfort Housing',
           description: 'Lightweight offline-first rental listings, landlord management & roommate matching for Zimbabwe.',
           theme_color: '#047857',
           background_color: '#f8fafc',

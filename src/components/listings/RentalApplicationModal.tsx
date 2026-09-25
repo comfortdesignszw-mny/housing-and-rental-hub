@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Property, RentalApplication } from '../../types';
 import { db } from '../../db/db';
+import { db as firestoreDb } from '../../db/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { offlineSyncService } from '../../services/offlineSync';
 import { useAuth } from '../../context/AuthContext';
 import { X, CheckCircle2, MessageCircle, Calendar, User, Phone, Mail, Users, Briefcase, DollarSign } from 'lucide-react';
 
@@ -106,6 +109,14 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
 
     // Save locally into IndexedDB applications table
     await db.applications.add(newApplication);
+
+    // Persist to Firestore if online, or queue for offline sync
+    try {
+      await setDoc(doc(firestoreDb, 'applications', newApplication.id), newApplication);
+    } catch (err) {
+      console.warn('Could not post application to Firestore online, enqueued:', err);
+      await offlineSyncService.enqueueAction('submit_application', newApplication);
+    }
 
     // Record in-app notification for the landlord's dashboard
     await db.notifications.add({

@@ -15,17 +15,6 @@ import {
   NotificationItem,
   OfflineQueueItem,
 } from '../types';
-import {
-  SEED_USERS,
-  SEED_PROPERTIES,
-  SEED_ROOMMATES,
-  SEED_TENANTS,
-  SEED_PAYMENTS,
-  SEED_LEASES,
-  SEED_MAINTENANCE,
-  SEED_APPLICATIONS,
-  SEED_NOTIFICATIONS,
-} from './seedData';
 
 export class ComfortHubDatabase extends Dexie {
   users!: Table<User, string>;
@@ -70,50 +59,22 @@ export class ComfortHubDatabase extends Dexie {
 export const db = new ComfortHubDatabase();
 
 /**
- * Initializes database with offline seed data on first launch
- * Zero network requests!
+ * Initializes clean local offline IndexedDB cache.
+ * All seeded and mock users/data removed to handle real-world industry data.
  */
 export async function initializeDatabase(): Promise<void> {
   try {
-    const propertyCount = await db.properties.count();
-    if (propertyCount === 0) {
-      console.log('ComfortHub: Seeding initial offline Zimbabwe database...');
-      await db.transaction(
-        'rw',
-        [
-          db.users,
-          db.properties,
-          db.roommateProfiles,
-          db.tenants,
-          db.rentPayments,
-          db.leases,
-          db.maintenanceRequests,
-          db.applications,
-          db.notifications,
-        ],
-        async () => {
-          await db.users.bulkAdd(SEED_USERS);
-          await db.properties.bulkAdd(SEED_PROPERTIES);
-          await db.roommateProfiles.bulkAdd(SEED_ROOMMATES);
-          await db.tenants.bulkAdd(SEED_TENANTS);
-          await db.rentPayments.bulkAdd(SEED_PAYMENTS);
-          await db.leases.bulkAdd(SEED_LEASES);
-          await db.maintenanceRequests.bulkAdd(SEED_MAINTENANCE);
-          await db.applications.bulkAdd(SEED_APPLICATIONS);
-          await db.notifications.bulkAdd(SEED_NOTIFICATIONS);
-        }
-      );
-      console.log('ComfortHub: Database seeded successfully offline.');
-    }
+    await db.open();
+    console.log('ComfortHub: Local offline IndexedDB cache ready for production data.');
   } catch (error) {
     console.error('ComfortHub: Error initializing local database', error);
   }
 }
 
 /**
- * Resets local database back to default seed data if user requests it
+ * Clears local offline cache without seeding fake data.
  */
-export async function resetDatabaseToDefaults(): Promise<void> {
+export async function clearLocalCache(): Promise<void> {
   await db.transaction(
     'rw',
     [
@@ -147,16 +108,6 @@ export async function resetDatabaseToDefaults(): Promise<void> {
       await db.likedRoommates.clear();
       await db.notifications.clear();
       await db.offlineQueue.clear();
-
-      await db.users.bulkAdd(SEED_USERS);
-      await db.properties.bulkAdd(SEED_PROPERTIES);
-      await db.roommateProfiles.bulkAdd(SEED_ROOMMATES);
-      await db.tenants.bulkAdd(SEED_TENANTS);
-      await db.rentPayments.bulkAdd(SEED_PAYMENTS);
-      await db.leases.bulkAdd(SEED_LEASES);
-      await db.maintenanceRequests.bulkAdd(SEED_MAINTENANCE);
-      await db.applications.bulkAdd(SEED_APPLICATIONS);
-      await db.notifications.bulkAdd(SEED_NOTIFICATIONS);
     }
   );
 }

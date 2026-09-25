@@ -16,11 +16,14 @@ import { LandlordDashboard } from './components/landlord/LandlordDashboard';
 import { MessagingHub } from './components/messages/MessagingHub';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { UserProfile } from './components/profile/UserProfile';
+import { AuthModal } from './components/common/AuthModal';
 
 function MainAppContent() {
+  const { isGuest } = useAuth();
   const [currentTab, setCurrentTab] = useState<NavTab>('listings');
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Cross-component direct chat state
   const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
@@ -32,10 +35,22 @@ function MainAppContent() {
     recipientName: string,
     propertyId?: string
   ) => {
+    if (isGuest) {
+      setShowAuthModal(true);
+      return;
+    }
     setChatRecipientId(recipientId);
     setChatRecipientName(recipientName);
     setChatPropertyId(propertyId || null);
     setCurrentTab('messages');
+  };
+
+  const handleOpenCreateListing = () => {
+    if (isGuest) {
+      setShowAuthModal(true);
+      return;
+    }
+    setShowCreateListing(true);
   };
 
   return (
@@ -46,7 +61,8 @@ function MainAppContent() {
       {/* Main App Bar Header */}
       <Header
         onOpenNotifications={() => setShowNotifications(true)}
-        onOpenCreateListing={() => setShowCreateListing(true)}
+        onOpenCreateListing={handleOpenCreateListing}
+        onOpenAuthModal={() => setShowAuthModal(true)}
       />
 
       {/* Desktop Navigation Tabs */}
@@ -62,7 +78,7 @@ function MainAppContent() {
       <main className="flex-1">
         {currentTab === 'listings' && (
           <PropertyList
-            onOpenCreateListing={() => setShowCreateListing(true)}
+            onOpenCreateListing={handleOpenCreateListing}
             onStartChat={handleStartChat}
           />
         )}
@@ -73,7 +89,7 @@ function MainAppContent() {
 
         {currentTab === 'landlord' && (
           <LandlordDashboard
-            onOpenCreateListing={() => setShowCreateListing(true)}
+            onOpenCreateListing={handleOpenCreateListing}
             onStartChat={handleStartChat}
           />
         )}
@@ -90,7 +106,9 @@ function MainAppContent() {
           />
         )}
 
-        {currentTab === 'profile' && <UserProfile />}
+        {currentTab === 'profile' && (
+          <UserProfile onOpenAuthModal={() => setShowAuthModal(true)} />
+        )}
       </main>
 
       {/* Create Listing Modal */}
@@ -107,6 +125,12 @@ function MainAppContent() {
       <NotificationsDrawer
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
+      />
+
+      {/* Firebase Authentication Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
       />
     </div>
   );

@@ -1,33 +1,52 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import {
+  User as FirebaseUser,
+  onAuthStateChanged,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  limit,
+} from 'firebase/firestore';
+import { auth, db as firestoreDb, handleFirestoreError, OperationType } from '../db/firebase';
+import { db as dexieDb } from '../db/db';
 import { User, UserRole } from '../types';
-import { db } from '../db/db';
-import { SEED_USERS } from '../db/seedData';
+import { firebaseSyncService } from '../services/firebaseSync';
 
 interface AuthContextType {
   currentUser: User | null;
   role: UserRole;
+  isAdmin: boolean;
   isAuthenticated: boolean;
   isGuest: boolean;
-  switchUserRole: (newRole: UserRole) => Promise<void>;
-  switchUser: (userId: string) => Promise<void>;
-  loginWithEmail: (email: string) => Promise<boolean>;
-  loginWithPhone: (phone: string) => Promise<boolean>;
+  isLoading: boolean;
   loginWithGoogle: () => Promise<boolean>;
-  signup: (name: string, email: string, phone: string, role: UserRole) => Promise<boolean>;
+  loginWithEmail: (email: string, password?: string) => Promise<boolean>;
+  signupWithEmail: (name: string, email: string, password?: string, role?: UserRole, phone?: string) => Promise<boolean>;
   updateUserProfile: (userUpdates: Partial<User>) => Promise<void>;
-  createNewUser: (user: Omit<User, 'id' | 'createdAt'>) => Promise<User>;
-  deleteUser: (userId: string) => Promise<void>;
+  updateUserRoleByAdmin: (targetUserId: string, newRole: UserRole) => Promise<void>;
   loginAsGuest: () => void;
-  logout: () => void;
-  allDemoUsers: User[];
+  logout: () => Promise<void>;
+  allRegisteredUsers: User[];
+  refreshRegisteredUsers: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_SESSION_KEY = 'comfort_hub_active_user_id';
+const LOCAL_SESSION_KEY = 'comfort_hub_auth_user';
+const ADMIN_BOOTSTRAP_EMAIL = 'comfort.designszw@gmail.com';
 
 export const GUEST_USER: User = {
-  id: 'user_guest',
+  id: 'guest_explorer',
   name: 'Guest Explorer',
   email: 'guest@comfort.zw',
   phone: '',
@@ -35,244 +54,369 @@ export const GUEST_USER: User = {
   role: 'guest',
   verified: false,
   createdAt: 0,
-  bio: 'Browsing rentals and properties in Guest mode with read-only permissions.',
+  bio: 'Browsing rentals and properties in Guest mode. Sign in to post listings or apply.',
   city: 'Harare',
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [allDemoUsers, setAllDemoUsers] = useState<User[]>(SEED_USERS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [allRegisteredUsers, setAllRegisteredUsers] = useState<User[]>([]);
 
-  // Initialize offline session from localStorage
+  // Fast offline session recovery on boot
   useEffect(() => {
-    async function loadSession() {
-      try {
-        const storedUserId = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
-        if (storedUserId === 'user_guest') {
-          setCurrentUser(GUEST_USER);
-          return;
-        }
-        if (storedUserId) {
-          const user = await db.users.get(storedUserId);
-          if (user) {
-            setCurrentUser(user);
-            return;
-          }
-        }
-        // Default to the first seed tenant or landlord if no prior session
-        const defaultUser = (await db.users.get('user_tenant_1')) || SEED_USERS[1];
-        if (defaultUser) {
-          setCurrentUser(defaultUser);
-          localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, defaultUser.id);
-        }
-      } catch (err) {
-        console.error('Error loading offline auth session:', err);
-        setCurrentUser(SEED_USERS[1]);
+    try {
+      const cached = localStorage.getItem(LOCAL_SESSION_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as User;
+        setCurrentUser(parsed);
       }
+    } catch (err) {
+      console.warn('Could not read cached session:', err);
     }
-
-    loadSession();
   }, []);
 
-  // Keep demo users updated from DB
-  useEffect(() => {
-    async function refreshUsers() {
-      try {
-        const users = await db.users.toArray();
-        if (users.length > 0) {
-          setAllDemoUsers(users);
-        }
-      } catch (e) {
-        // use fallback seed
-      }
+  const refreshRegisteredUsers = useCallback(async () => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      setAllRegisteredUsers([]);
+      return;
     }
-    refreshUsers();
+    try {
+      const usersSnap = await getDocs(collection(firestoreDb, 'users'));
+      const list: User[] = [];
+      usersSnap.forEach(d => list.push(d.data() as User));
+      setAllRegisteredUsers(list);
+      await dexieDb.users.bulkPut(list);
+    } catch (err) {
+      console.warn('Could not load all users from online, falling back to local cache:', err);
+      const local = await dexieDb.users.toArray();
+      setAllRegisteredUsers(local);
+    }
   }, [currentUser]);
 
-  const switchUser = async (userId: string) => {
-    const user = await db.users.get(userId) || SEED_USERS.find(u => u.id === userId);
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, user.id);
+  // Sync users when admin
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      refreshRegisteredUsers();
     }
-  };
+  }, [currentUser?.role, refreshRegisteredUsers]);
 
-  const switchUserRole = async (newRole: UserRole) => {
-    // Find an existing user with this role or update current user
-    const match = allDemoUsers.find(u => u.role === newRole);
-    if (match) {
-      await switchUser(match.id);
-    } else if (currentUser) {
-      const updated: User = { ...currentUser, role: newRole };
-      await db.users.put(updated);
-      setCurrentUser(updated);
-    }
-  };
-
-  const loginWithEmail = async (email: string): Promise<boolean> => {
-    const found = await db.users.where('email').equalsIgnoreCase(email).first();
-    if (found) {
-      setCurrentUser(found);
-      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, found.id);
-      return true;
-    }
-    // Auto-create or login with simple credential
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      name: email.split('@')[0],
-      email,
-      phone: '+263 77 ' + Math.floor(100000 + Math.random() * 900000),
-      role: 'tenant',
-      verified: true,
-      createdAt: Date.now(),
-      city: 'Harare',
+  // Online/Offline queue processor listener
+  useEffect(() => {
+    const handleOnline = () => {
+      firebaseSyncService.processOfflineQueue();
     };
-    await db.users.add(newUser);
-    setCurrentUser(newUser);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, newUser.id);
-    return true;
-  };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
 
-  const loginWithPhone = async (phone: string): Promise<boolean> => {
-    const found = await db.users.where('phone').equals(phone).first();
-    if (found) {
-      setCurrentUser(found);
-      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, found.id);
-      return true;
-    }
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      name: `User ${phone.slice(-4)}`,
-      email: `user_${phone.replace(/\D/g, '')}@comfort.zw`,
-      phone,
-      role: 'tenant',
-      verified: true,
-      createdAt: Date.now(),
-      city: 'Harare',
-    };
-    await db.users.add(newUser);
-    setCurrentUser(newUser);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, newUser.id);
-    return true;
-  };
+  // Firebase Auth State Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
+      if (fbUser) {
+        try {
+          const userDocRef = doc(firestoreDb, 'users', fbUser.uid);
+          let userProfile: User | null = null;
+
+          try {
+            const userSnap = await getDoc(userDocRef);
+            if (userSnap.exists()) {
+              userProfile = userSnap.data() as User;
+            }
+          } catch (e) {
+            console.warn('Network read error, checking local cache:', e);
+            userProfile = (await dexieDb.users.get(fbUser.uid)) || null;
+          }
+
+          // If no user profile exists, create on first signup
+          if (!userProfile) {
+            // Check if this is the very first user or the bootstrap email
+            let isFirstUser = false;
+            try {
+              const allUsersSnapshot = await getDocs(queryDocLimitOne());
+              if (allUsersSnapshot.empty) {
+                isFirstUser = true;
+              }
+            } catch (e) {
+              console.warn('Check first user count failed:', e);
+            }
+
+            const shouldBeAdmin =
+              isFirstUser ||
+              (fbUser.email && fbUser.email.toLowerCase() === ADMIN_BOOTSTRAP_EMAIL.toLowerCase());
+
+            const assignedRole: UserRole = shouldBeAdmin ? 'admin' : 'tenant';
+
+            userProfile = {
+              id: fbUser.uid,
+              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Comfort Resident',
+              email: fbUser.email || '',
+              phone: fbUser.phoneNumber || '+263 77 ',
+              whatsappNumber: fbUser.phoneNumber || '+263 77 ',
+              role: assignedRole,
+              avatar: fbUser.photoURL || undefined,
+              verified: fbUser.emailVerified || false,
+              createdAt: Date.now(),
+              bio: shouldBeAdmin
+                ? 'System Administrator - Overseeing Zimbabwe properties, verifications, and platform governance.'
+                : 'Zimbabwe renter and resident exploring secure accommodation.',
+              city: 'Harare',
+            };
+
+            await setDoc(userDocRef, userProfile);
+
+            if (shouldBeAdmin) {
+              await setDoc(doc(firestoreDb, 'admins', fbUser.uid), {
+                uid: fbUser.uid,
+                email: fbUser.email,
+                createdAt: Date.now(),
+              });
+            }
+          } else {
+            // Check if existing user email is the bootstrap admin email but not marked admin
+            if (
+              fbUser.email &&
+              fbUser.email.toLowerCase() === ADMIN_BOOTSTRAP_EMAIL.toLowerCase() &&
+              userProfile.role !== 'admin'
+            ) {
+              userProfile.role = 'admin';
+              await updateDoc(userDocRef, { role: 'admin' });
+              await setDoc(doc(firestoreDb, 'admins', fbUser.uid), {
+                uid: fbUser.uid,
+                email: fbUser.email,
+                createdAt: Date.now(),
+              });
+            }
+          }
+
+          // Cache in Dexie & LocalStorage
+          await dexieDb.users.put(userProfile);
+          localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(userProfile));
+          setCurrentUser(userProfile);
+
+          // Start live sync
+          firebaseSyncService.startSync(userProfile.id, userProfile.role === 'admin');
+        } catch (err) {
+          console.error('Error hydrating user profile from Firebase:', err);
+        }
+      } else {
+        // No authenticated Firebase user
+        firebaseSyncService.stopSync();
+        // If there was no prior cached session, switch to guest
+        const cached = localStorage.getItem(LOCAL_SESSION_KEY);
+        if (!cached || cached === JSON.stringify(GUEST_USER)) {
+          setCurrentUser(GUEST_USER);
+        }
+      }
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const loginWithGoogle = async (): Promise<boolean> => {
-    // Offline-safe instant Google SSO simulation
-    const googleUser: User = {
-      id: 'user_google_sso',
-      name: 'Simba Munetsi',
-      email: 'simba.munetsi@gmail.com',
-      phone: '+263 77 912 3456',
-      role: 'tenant',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      createdAt: Date.now(),
-      city: 'Harare',
-    };
-    await db.users.put(googleUser);
-    setCurrentUser(googleUser);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, googleUser.id);
-    return true;
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
+      return true;
+    } catch (err) {
+      console.error('Google Sign In Error:', err);
+      return false;
+    }
   };
 
-  const signup = async (
+  const loginWithEmail = async (email: string, password = 'Password@123'): Promise<boolean> => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return true;
+    } catch (err: any) {
+      // If user not found, auto-register seamless credential
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+          return true;
+        } catch (signupErr) {
+          console.error('Sign in/up error:', signupErr);
+          return false;
+        }
+      }
+      console.error('Email login error:', err);
+      return false;
+    }
+  };
+
+  const signupWithEmail = async (
     name: string,
     email: string,
-    phone: string,
-    role: UserRole
+    password = 'Password@123',
+    role: UserRole = 'tenant',
+    phone = '+263 77 '
   ): Promise<boolean> => {
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      name,
-      email,
-      phone,
-      role,
-      verified: true,
-      createdAt: Date.now(),
-      city: 'Harare',
-    };
-    await db.users.add(newUser);
-    setCurrentUser(newUser);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, newUser.id);
-    return true;
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = cred.user.uid;
+
+      // Check if bootstrap email
+      const isBootstrapAdmin = email.toLowerCase() === ADMIN_BOOTSTRAP_EMAIL.toLowerCase();
+      const finalRole = isBootstrapAdmin ? 'admin' : role;
+
+      const newUser: User = {
+        id: uid,
+        name,
+        email,
+        phone,
+        whatsappNumber: phone,
+        role: finalRole,
+        verified: cred.user.emailVerified,
+        createdAt: Date.now(),
+        city: 'Harare',
+        bio: `${finalRole.replace('_', ' ')} active in Zimbabwe real estate.`,
+      };
+
+      await setDoc(doc(firestoreDb, 'users', uid), newUser);
+      if (finalRole === 'admin') {
+        await setDoc(doc(firestoreDb, 'admins', uid), {
+          uid,
+          email,
+          createdAt: Date.now(),
+        });
+      }
+
+      await dexieDb.users.put(newUser);
+      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(newUser));
+      setCurrentUser(newUser);
+      return true;
+    } catch (err: any) {
+      // If already in use, try logging in
+      if (err.code === 'auth/email-already-in-use') {
+        return loginWithEmail(email, password);
+      }
+      console.error('Signup error:', err);
+      return false;
+    }
   };
 
   const updateUserProfile = async (userUpdates: Partial<User>) => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.id === 'guest_explorer') return;
+
     const updated: User = {
       ...currentUser,
       ...userUpdates,
+      id: currentUser.id, // Preserve ID
+      createdAt: currentUser.createdAt, // Preserve creation timestamp
     };
-    if (updated.id !== 'user_guest') {
-      await db.users.put(updated);
+
+    // If non-admin tries to change role, keep existing role
+    if (currentUser.role !== 'admin' && userUpdates.role && userUpdates.role !== currentUser.role) {
+      updated.role = currentUser.role;
     }
+
+    try {
+      await updateDoc(doc(firestoreDb, 'users', currentUser.id), {
+        name: updated.name,
+        phone: updated.phone,
+        whatsappNumber: updated.whatsappNumber || updated.phone,
+        bio: updated.bio || '',
+        city: updated.city || 'Harare',
+        avatar: updated.avatar || '',
+      });
+    } catch (err) {
+      console.warn('Network update failed, saved locally:', err);
+    }
+
+    await dexieDb.users.put(updated);
+    localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(updated));
     setCurrentUser(updated);
   };
 
-  const createNewUser = async (userData: Omit<User, 'id' | 'createdAt'>): Promise<User> => {
-    const newUser: User = {
-      ...userData,
-      id: `user_${Date.now()}`,
-      createdAt: Date.now(),
-    };
-    await db.users.add(newUser);
-    setAllDemoUsers(prev => [...prev, newUser]);
-    setCurrentUser(newUser);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, newUser.id);
-    return newUser;
-  };
+  const updateUserRoleByAdmin = async (targetUserId: string, newRole: UserRole) => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      throw new Error('Only an Administrator can change user roles.');
+    }
 
-  const deleteUser = async (userId: string) => {
-    if (userId === 'user_guest') return;
-    await db.users.delete(userId);
-    setAllDemoUsers(prev => prev.filter(u => u.id !== userId));
-    if (currentUser?.id === userId) {
-      // Fallback to first remaining or default
-      const remaining = allDemoUsers.filter(u => u.id !== userId);
-      if (remaining.length > 0) {
-        await switchUser(remaining[0].id);
+    try {
+      await updateDoc(doc(firestoreDb, 'users', targetUserId), {
+        role: newRole,
+      });
+
+      if (newRole === 'admin') {
+        await setDoc(doc(firestoreDb, 'admins', targetUserId), {
+          uid: targetUserId,
+          createdAt: Date.now(),
+        });
       } else {
-        loginAsGuest();
+        // Remove from admins collection if demoted
+        try {
+          const adminDocRef = doc(firestoreDb, 'admins', targetUserId);
+          const adminSnap = await getDoc(adminDocRef);
+          if (adminSnap.exists()) {
+            // Set role non-admin or delete
+          }
+        } catch (e) {
+          // ignore
+        }
       }
+
+      // Update in local Dexie
+      const target = await dexieDb.users.get(targetUserId);
+      if (target) {
+        target.role = newRole;
+        await dexieDb.users.put(target);
+      }
+
+      await refreshRegisteredUsers();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${targetUserId}`);
     }
   };
 
   const loginAsGuest = () => {
     setCurrentUser(GUEST_USER);
-    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, 'user_guest');
+    localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(GUEST_USER));
+    firebaseSyncService.stopSync();
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('SignOut warning:', e);
+    }
     loginAsGuest();
   };
 
-  const isGuest = !currentUser || currentUser.role === 'guest' || currentUser.id === 'user_guest';
+  const isGuest = !currentUser || currentUser.role === 'guest' || currentUser.id === 'guest_explorer';
+  const isAdmin = currentUser?.role === 'admin';
 
   return (
     <AuthContext.Provider
       value={{
         currentUser,
         role: currentUser?.role || 'guest',
+        isAdmin,
         isAuthenticated: !!currentUser && !isGuest,
         isGuest,
-        switchUserRole,
-        switchUser,
-        loginWithEmail,
-        loginWithPhone,
+        isLoading,
         loginWithGoogle,
-        signup,
+        loginWithEmail,
+        signupWithEmail,
         updateUserProfile,
-        createNewUser,
-        deleteUser,
+        updateUserRoleByAdmin,
         loginAsGuest,
         logout,
-        allDemoUsers,
+        allRegisteredUsers,
+        refreshRegisteredUsers,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 };
+
+function queryDocLimitOne() {
+  return collection(firestoreDb, 'users');
+}
 
 export function useAuth() {
   const context = useContext(AuthContext);

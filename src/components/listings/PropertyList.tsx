@@ -360,7 +360,28 @@ export const PropertyList: React.FC<PropertyListProps> = ({
       </div>
 
       {/* Virtualized / Batched Listings Grid */}
-      {visibleProperties.length === 0 ? (
+      {allProperties.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-3 shadow-2xs">
+          <Building className="w-12 h-12 text-emerald-600/60 mx-auto" />
+          <h3 className="font-extrabold text-slate-900 text-sm">Clean Database Ready for Industry Data</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            All sample data has been cleared. Real landlords, agents, and property managers can add verified property listings to the persistent cloud database.
+          </p>
+          {(role === 'landlord' || role === 'property_manager' || role === 'admin') ? (
+            <button
+              onClick={onOpenCreateListing}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 transition cursor-pointer shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Publish First Property Listing</span>
+            </button>
+          ) : (
+            <p className="text-[11px] text-emerald-700 font-medium">
+              Sign in as a Landlord or Administrator to publish real properties.
+            </p>
+          )}
+        </div>
+      ) : visibleProperties.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
           <Building className="w-10 h-10 text-slate-300 mx-auto" />
           <h3 className="font-bold text-slate-900 text-sm">No properties match your filters</h3>
@@ -369,7 +390,7 @@ export const PropertyList: React.FC<PropertyListProps> = ({
           </p>
           <button
             onClick={handleResetFilters}
-            className="inline-flex items-center gap-1 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800"
+            className="inline-flex items-center gap-1 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 cursor-pointer"
           >
             Show All Listings
           </button>

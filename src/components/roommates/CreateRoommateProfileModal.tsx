@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { RoommateProfile } from '../../types';
 import { db } from '../../db/db';
+import { db as firestoreDb } from '../../db/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { X, Sparkles, Camera, Upload, Trash2, CheckCircle2 } from 'lucide-react';
 import { getSuburbsByCity } from '../../data/zimbabweLocations';
@@ -144,6 +146,11 @@ export const CreateRoommateProfileModal: React.FC<CreateRoommateProfileModalProp
     };
 
     await db.roommateProfiles.put(profileData);
+    try {
+      await setDoc(doc(firestoreDb, 'roommateProfiles', profileData.id), profileData);
+    } catch (err) {
+      console.warn('Could not post roommate profile to Firestore online:', err);
+    }
     onSaved(profileData);
     onClose();
   };

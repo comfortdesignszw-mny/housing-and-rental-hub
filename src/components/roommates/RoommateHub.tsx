@@ -210,7 +210,22 @@ export const RoommateHub: React.FC<RoommateHubProps> = ({ onStartChat }) => {
       </div>
 
       {/* Cards Grid */}
-      {sortedAndFilteredProfiles.length === 0 ? (
+      {allProfiles.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-3 shadow-2xs">
+          <Users className="w-12 h-12 text-emerald-600/60 mx-auto" />
+          <h3 className="font-extrabold text-slate-900 text-sm">Roommate Matching Engine Ready</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            No seeded roommates. Create your roommate profile to begin matching with students and working professionals in Harare, Bulawayo, Chitungwiza, and across Zimbabwe.
+          </p>
+          <button
+            onClick={() => setShowEditProfileModal(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 transition cursor-pointer shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create Your Roommate Profile</span>
+          </button>
+        </div>
+      ) : sortedAndFilteredProfiles.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
           <Users className="w-10 h-10 text-slate-300 mx-auto" />
           <h3 className="font-bold text-slate-900 text-sm">No roommate profiles match</h3>
