@@ -74,6 +74,29 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
+/**
+ * Strips all undefined fields recursively so Firestore setDoc / updateDoc does not throw
+ * "Unsupported field value: undefined" errors.
+ */
+export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): T {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result: any = Array.isArray(obj) ? [] : {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        result[key] = sanitizeForFirestore(value);
+      } else if (Array.isArray(value)) {
+        result[key] = value
+          .filter(v => v !== undefined)
+          .map(v => (v && typeof v === 'object' ? sanitizeForFirestore(v) : v));
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
 // CRITICAL CONSTRAINT: Test connection to Firestore on initial boot
 export async function testConnection() {
   try {

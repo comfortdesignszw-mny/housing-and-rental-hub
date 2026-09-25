@@ -15,9 +15,8 @@ import {
   updateDoc,
   collection,
   getDocs,
-  limit,
 } from 'firebase/firestore';
-import { auth, db as firestoreDb, handleFirestoreError, OperationType } from '../db/firebase';
+import { auth, db as firestoreDb, handleFirestoreError, OperationType, sanitizeForFirestore } from '../db/firebase';
 import { db as dexieDb } from '../db/db';
 import { User, UserRole } from '../types';
 import { firebaseSyncService } from '../services/firebaseSync';
@@ -42,7 +41,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const LOCAL_SESSION_KEY = 'comfort_hub_auth_user';
+const LOCAL_SESSION_KEY = 'comfort_housing_auth_user_v2';
 const ADMIN_BOOTSTRAP_EMAIL = 'comfort.designszw@gmail.com';
 
 export const GUEST_USER: User = {
@@ -59,21 +58,25 @@ export const GUEST_USER: User = {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [allRegisteredUsers, setAllRegisteredUsers] = useState<User[]>([]);
-
-  // Fast offline session recovery on boot
-  useEffect(() => {
+  // Synchronous recovery from persistent storage to avoid authentication flicker across sessions
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_SESSION_KEY);
       if (cached) {
-        const parsed = JSON.parse(cached) as User;
-        setCurrentUser(parsed);
+        return JSON.parse(cached) as User;
       }
     } catch (err) {
       console.warn('Could not read cached session:', err);
     }
+    return GUEST_USER;
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [allRegisteredUsers, setAllRegisteredUsers] = useState<User[]>([]);
+
+  // Start continuous public sync immediately for all sessions and devices
+  useEffect(() => {
+    firebaseSyncService.startPublicSync();
   }, []);
 
   const refreshRegisteredUsers = useCallback(async () => {
@@ -110,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
-  // Firebase Auth State Listener
+  // Firebase Auth State Listener with device session persistence
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
       if (fbUser) {
@@ -130,10 +133,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // If no user profile exists, create on first signup
           if (!userProfile) {
-            // Check if this is the very first user or the bootstrap email
             let isFirstUser = false;
             try {
-              const allUsersSnapshot = await getDocs(queryDocLimitOne());
+              const allUsersSnapshot = await getDocs(collection(firestoreDb, 'users'));
               if (allUsersSnapshot.empty) {
                 isFirstUser = true;
               }
@@ -159,11 +161,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               createdAt: Date.now(),
               bio: shouldBeAdmin
                 ? 'System Administrator - Overseeing Zimbabwe properties, verifications, and platform governance.'
-                : 'Zimbabwe renter and resident exploring secure accommodation.',
+                : 'Zimbabwe resident exploring verified accommodations.',
               city: 'Harare',
             };
 
-            await setDoc(userDocRef, userProfile);
+            const cleanUserProfile = sanitizeForFirestore(userProfile);
+            await setDoc(userDocRef, cleanUserProfile);
 
             if (shouldBeAdmin) {
               await setDoc(doc(firestoreDb, 'admins', fbUser.uid), {
@@ -189,24 +192,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
 
-          // Cache in Dexie & LocalStorage
+          // Cache in Dexie & LocalStorage for session persistence across browser reloads
           await dexieDb.users.put(userProfile);
           localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(userProfile));
           setCurrentUser(userProfile);
 
-          // Start live sync
-          firebaseSyncService.startSync(userProfile.id, userProfile.role === 'admin');
+          // Start authenticated user-specific sync (messages, applications, notifications)
+          firebaseSyncService.startUserSync(userProfile.id, userProfile.role === 'admin');
         } catch (err) {
           console.error('Error hydrating user profile from Firebase:', err);
         }
       } else {
         // No authenticated Firebase user
-        firebaseSyncService.stopSync();
-        // If there was no prior cached session, switch to guest
-        const cached = localStorage.getItem(LOCAL_SESSION_KEY);
-        if (!cached || cached === JSON.stringify(GUEST_USER)) {
-          setCurrentUser(GUEST_USER);
-        }
+        firebaseSyncService.stopUserSync();
+        localStorage.removeItem(LOCAL_SESSION_KEY);
+        setCurrentUser(GUEST_USER);
       }
       setIsLoading(false);
     });
@@ -231,7 +231,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithEmailAndPassword(auth, email, password);
       return true;
     } catch (err: any) {
-      // If user not found, auto-register seamless credential
       if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
         try {
           await createUserWithEmailAndPassword(auth, email, password);
@@ -257,7 +256,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       const uid = cred.user.uid;
 
-      // Check if bootstrap email
       const isBootstrapAdmin = email.toLowerCase() === ADMIN_BOOTSTRAP_EMAIL.toLowerCase();
       const finalRole = isBootstrapAdmin ? 'admin' : role;
 
@@ -271,10 +269,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verified: cred.user.emailVerified,
         createdAt: Date.now(),
         city: 'Harare',
-        bio: `${finalRole.replace('_', ' ')} active in Zimbabwe real estate.`,
+        bio: `${finalRole.replace('_', ' ')} active on Comfort Housing.`,
       };
 
-      await setDoc(doc(firestoreDb, 'users', uid), newUser);
+      const cleanUser = sanitizeForFirestore(newUser);
+      await setDoc(doc(firestoreDb, 'users', uid), cleanUser);
+
       if (finalRole === 'admin') {
         await setDoc(doc(firestoreDb, 'admins', uid), {
           uid,
@@ -288,7 +288,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentUser(newUser);
       return true;
     } catch (err: any) {
-      // If already in use, try logging in
       if (err.code === 'auth/email-already-in-use') {
         return loginWithEmail(email, password);
       }
@@ -303,17 +302,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated: User = {
       ...currentUser,
       ...userUpdates,
-      id: currentUser.id, // Preserve ID
-      createdAt: currentUser.createdAt, // Preserve creation timestamp
+      id: currentUser.id,
+      createdAt: currentUser.createdAt,
     };
 
-    // If non-admin tries to change role, keep existing role
     if (currentUser.role !== 'admin' && userUpdates.role && userUpdates.role !== currentUser.role) {
       updated.role = currentUser.role;
     }
 
     try {
-      await updateDoc(doc(firestoreDb, 'users', currentUser.id), {
+      const sanitizedUpdates = sanitizeForFirestore({
         name: updated.name,
         phone: updated.phone,
         whatsappNumber: updated.whatsappNumber || updated.phone,
@@ -321,6 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         city: updated.city || 'Harare',
         avatar: updated.avatar || '',
       });
+      await updateDoc(doc(firestoreDb, 'users', currentUser.id), sanitizedUpdates);
     } catch (err) {
       console.warn('Network update failed, saved locally:', err);
     }
@@ -345,20 +344,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           uid: targetUserId,
           createdAt: Date.now(),
         });
-      } else {
-        // Remove from admins collection if demoted
-        try {
-          const adminDocRef = doc(firestoreDb, 'admins', targetUserId);
-          const adminSnap = await getDoc(adminDocRef);
-          if (adminSnap.exists()) {
-            // Set role non-admin or delete
-          }
-        } catch (e) {
-          // ignore
-        }
       }
 
-      // Update in local Dexie
       const target = await dexieDb.users.get(targetUserId);
       if (target) {
         target.role = newRole;
@@ -372,9 +359,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginAsGuest = () => {
+    firebaseSyncService.stopUserSync();
+    localStorage.removeItem(LOCAL_SESSION_KEY);
     setCurrentUser(GUEST_USER);
-    localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(GUEST_USER));
-    firebaseSyncService.stopSync();
   };
 
   const logout = async () => {
@@ -383,7 +370,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('SignOut warning:', e);
     }
-    loginAsGuest();
+    firebaseSyncService.stopUserSync();
+    localStorage.removeItem(LOCAL_SESSION_KEY);
+    setCurrentUser(GUEST_USER);
   };
 
   const isGuest = !currentUser || currentUser.role === 'guest' || currentUser.id === 'guest_explorer';
@@ -413,10 +402,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
-
-function queryDocLimitOne() {
-  return collection(firestoreDb, 'users');
-}
 
 export function useAuth() {
   const context = useContext(AuthContext);

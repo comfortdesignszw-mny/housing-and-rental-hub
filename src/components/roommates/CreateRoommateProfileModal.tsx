@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { RoommateProfile } from '../../types';
 import { db } from '../../db/db';
-import { db as firestoreDb } from '../../db/firebase';
+import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { X, Sparkles, Camera, Upload, Trash2, CheckCircle2 } from 'lucide-react';
@@ -145,13 +145,15 @@ export const CreateRoommateProfileModal: React.FC<CreateRoommateProfileModalProp
       createdAt: existingProfile?.createdAt || Date.now(),
     };
 
-    await db.roommateProfiles.put(profileData);
+    const cleanProfileData = sanitizeForFirestore(profileData);
+
+    await db.roommateProfiles.put(cleanProfileData);
     try {
-      await setDoc(doc(firestoreDb, 'roommateProfiles', profileData.id), profileData);
+      await setDoc(doc(firestoreDb, 'roommateProfiles', cleanProfileData.id), cleanProfileData);
     } catch (err) {
       console.warn('Could not post roommate profile to Firestore online:', err);
     }
-    onSaved(profileData);
+    onSaved(cleanProfileData);
     onClose();
   };
 

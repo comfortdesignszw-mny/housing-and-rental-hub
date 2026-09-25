@@ -35,7 +35,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token.email == 'comfort.designszw@gmail.com' && isVerifiedEmail())
+        request.auth.token.email == 'comfort.designszw@gmail.com'
       );
     }
 
@@ -109,7 +109,7 @@ service cloud.firestore {
       allow get, list: if true;
 
       allow create: if isSignedIn() && isValidId(propertyId) && isValidProperty(incoming()) &&
-        incoming().landlordId == request.auth.uid;
+        (incoming().landlordId == request.auth.uid || isAdmin());
 
       allow update: if isSignedIn() && isValidId(propertyId) && isValidProperty(incoming()) && (
         isAdmin() ||
@@ -139,7 +139,7 @@ service cloud.firestore {
       allow get, list: if true;
 
       allow create: if isSignedIn() && isValidId(profileId) && isValidRoommate(incoming()) &&
-        incoming().userId == request.auth.uid;
+        (incoming().userId == request.auth.uid || isAdmin());
 
       allow update: if isSignedIn() && isValidId(profileId) && isValidRoommate(incoming()) && (
         isAdmin() ||

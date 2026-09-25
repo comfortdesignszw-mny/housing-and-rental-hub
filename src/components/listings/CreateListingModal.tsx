@@ -7,7 +7,7 @@ import {
 } from '../../data/zimbabweLocations';
 import { compressImage } from '../../services/imageCompression';
 import { db } from '../../db/db';
-import { db as firestoreDb } from '../../db/firebase';
+import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { offlineSyncService } from '../../services/offlineSync';
@@ -232,21 +232,23 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
       updatedAt: Date.now(),
     };
 
+    const cleanPropertyData = sanitizeForFirestore(propertyData);
+
     if (propertyToEdit) {
-      await db.properties.put(propertyData);
+      await db.properties.put(cleanPropertyData);
       try {
-        await setDoc(doc(firestoreDb, 'properties', propertyId), propertyData);
+        await setDoc(doc(firestoreDb, 'properties', propertyId), cleanPropertyData);
       } catch (err) {
         console.warn('Could not update Firestore listing online, queued:', err);
-        await offlineSyncService.enqueueAction('update_listing', propertyData);
+        await offlineSyncService.enqueueAction('update_listing', cleanPropertyData);
       }
     } else {
-      await db.properties.add(propertyData);
+      await db.properties.add(cleanPropertyData);
       try {
-        await setDoc(doc(firestoreDb, 'properties', propertyId), propertyData);
+        await setDoc(doc(firestoreDb, 'properties', propertyId), cleanPropertyData);
       } catch (err) {
         console.warn('Could not post Firestore listing online, queued:', err);
-        await offlineSyncService.enqueueAction('create_listing', propertyData);
+        await offlineSyncService.enqueueAction('create_listing', cleanPropertyData);
       }
     }
 

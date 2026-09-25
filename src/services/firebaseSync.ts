@@ -9,74 +9,135 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
   limit,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db as firestoreDb, auth, handleFirestoreError, OperationType } from '../db/firebase';
+import { db as firestoreDb, auth, handleFirestoreError, OperationType, sanitizeForFirestore } from '../db/firebase';
 import { db as dexieDb } from '../db/db';
-import { Property, RoommateProfile, RentalApplication, Message, Conversation, NotificationItem, User } from '../types';
+import { Property, RoommateProfile, RentalApplication, Message, NotificationItem, User } from '../types';
 
 class FirebaseSyncService {
-  private unsubscribers: Unsubscribe[] = [];
+  private publicUnsubscribers: Unsubscribe[] = [];
+  private userUnsubscribers: Unsubscribe[] = [];
   private isProcessingQueue = false;
+  private isPublicSyncRunning = false;
+  private currentSyncedUserId: string | null = null;
 
   /**
-   * Starts live Firestore listeners and syncs documents to local Dexie IndexedDB cache.
+   * Starts live public listeners for Properties and Roommate Matching.
+   * Runs for all users, all sessions, and all guest browsers across devices.
    */
-  public startSync(currentUserId: string, isAdmin: boolean) {
-    this.stopSync();
+  public async startPublicSync() {
+    if (this.isPublicSyncRunning) return;
+    this.isPublicSyncRunning = true;
 
+    // Fast initial population from Firestore into IndexedDB cache
     try {
-      // 1. Properties Listener (Public Real World Listings)
-      const propertiesPath = 'properties';
-      const propertiesQuery = query(collection(firestoreDb, propertiesPath), limit(100));
-      const unsubProps = onSnapshot(
-        propertiesQuery,
-        async snapshot => {
-          const properties: Property[] = [];
-          snapshot.forEach(docSnap => {
-            properties.push(docSnap.data() as Property);
-          });
-          if (properties.length > 0) {
-            await dexieDb.properties.bulkPut(properties);
-          }
-        },
-        error => {
-          handleFirestoreError(error, OperationType.LIST, propertiesPath);
-        }
-      );
-      this.unsubscribers.push(unsubProps);
+      const [propSnap, roomSnap] = await Promise.allSettled([
+        getDocs(query(collection(firestoreDb, 'properties'), limit(200))),
+        getDocs(query(collection(firestoreDb, 'roommateProfiles'), limit(200))),
+      ]);
 
-      // 2. Roommate Profiles Listener
-      const roommatesPath = 'roommateProfiles';
-      const roommatesQuery = query(collection(firestoreDb, roommatesPath), limit(100));
-      const unsubRoommates = onSnapshot(
-        roommatesQuery,
-        async snapshot => {
-          const profiles: RoommateProfile[] = [];
+      if (propSnap.status === 'fulfilled' && !propSnap.value.empty) {
+        const props: Property[] = [];
+        propSnap.value.forEach(d => props.push(d.data() as Property));
+        await dexieDb.properties.bulkPut(props);
+      }
+
+      if (roomSnap.status === 'fulfilled' && !roomSnap.value.empty) {
+        const rooms: RoommateProfile[] = [];
+        roomSnap.value.forEach(d => rooms.push(d.data() as RoommateProfile));
+        await dexieDb.roommateProfiles.bulkPut(rooms);
+      }
+    } catch (err) {
+      console.warn('Initial public cloud cache hydration note:', err);
+    }
+
+    // 1. Real-time Properties Listener (all sessions, all devices, including guests)
+    const propertiesPath = 'properties';
+    const unsubProps = onSnapshot(
+      collection(firestoreDb, propertiesPath),
+      async snapshot => {
+        try {
+          const cloudIds = new Set<string>();
+          const props: Property[] = [];
+
           snapshot.forEach(docSnap => {
+            cloudIds.add(docSnap.id);
+            props.push(docSnap.data() as Property);
+          });
+
+          // Reconcile removed properties from IndexedDB
+          const localProps = await dexieDb.properties.toArray();
+          for (const lp of localProps) {
+            if (!cloudIds.has(lp.id)) {
+              await dexieDb.properties.delete(lp.id);
+            }
+          }
+
+          if (props.length > 0) {
+            await dexieDb.properties.bulkPut(props);
+          }
+        } catch (syncErr) {
+          console.error('Properties sync error:', syncErr);
+        }
+      },
+      error => {
+        handleFirestoreError(error, OperationType.LIST, propertiesPath);
+      }
+    );
+    this.publicUnsubscribers.push(unsubProps);
+
+    // 2. Real-time Roommate Matching Profiles Listener (all sessions, all devices, including guests)
+    const roommatesPath = 'roommateProfiles';
+    const unsubRoommates = onSnapshot(
+      collection(firestoreDb, roommatesPath),
+      async snapshot => {
+        try {
+          const cloudIds = new Set<string>();
+          const profiles: RoommateProfile[] = [];
+
+          snapshot.forEach(docSnap => {
+            cloudIds.add(docSnap.id);
             profiles.push(docSnap.data() as RoommateProfile);
           });
+
+          // Reconcile removed roommate profiles from IndexedDB
+          const localProfiles = await dexieDb.roommateProfiles.toArray();
+          for (const lp of localProfiles) {
+            if (!cloudIds.has(lp.id)) {
+              await dexieDb.roommateProfiles.delete(lp.id);
+            }
+          }
+
           if (profiles.length > 0) {
             await dexieDb.roommateProfiles.bulkPut(profiles);
           }
-        },
-        error => {
-          handleFirestoreError(error, OperationType.LIST, roommatesPath);
+        } catch (syncErr) {
+          console.error('Roommate sync error:', syncErr);
         }
-      );
-      this.unsubscribers.push(unsubRoommates);
+      },
+      error => {
+        handleFirestoreError(error, OperationType.LIST, roommatesPath);
+      }
+    );
+    this.publicUnsubscribers.push(unsubRoommates);
+  }
 
-      // 3. User Messages (Realtime WhatsApp-like synchronization)
-      // Listen to messages where user is sender or recipient
+  /**
+   * Starts authenticated user-specific listeners:
+   * Real-time encrypted messages, rental applications, user notifications, and admin user directory.
+   */
+  public startUserSync(userId: string, isAdmin: boolean) {
+    if (this.currentSyncedUserId === userId) return;
+    this.stopUserSync();
+    this.currentSyncedUserId = userId;
+
+    try {
+      // 1. Messages Listener (where user is recipient)
       const messagesPath = 'messages';
-      const messagesRecipientQuery = query(
-        collection(firestoreDb, messagesPath),
-        where('recipientId', '==', currentUserId)
-      );
       const unsubRecvMsgs = onSnapshot(
-        messagesRecipientQuery,
+        query(collection(firestoreDb, messagesPath), where('recipientId', '==', userId)),
         async snapshot => {
           const msgs: Message[] = [];
           snapshot.forEach(docSnap => {
@@ -90,14 +151,11 @@ class FirebaseSyncService {
           handleFirestoreError(error, OperationType.LIST, messagesPath);
         }
       );
-      this.unsubscribers.push(unsubRecvMsgs);
+      this.userUnsubscribers.push(unsubRecvMsgs);
 
-      const messagesSenderQuery = query(
-        collection(firestoreDb, messagesPath),
-        where('senderId', '==', currentUserId)
-      );
+      // 2. Messages Listener (where user is sender)
       const unsubSentMsgs = onSnapshot(
-        messagesSenderQuery,
+        query(collection(firestoreDb, messagesPath), where('senderId', '==', userId)),
         async snapshot => {
           const msgs: Message[] = [];
           snapshot.forEach(docSnap => {
@@ -111,16 +169,12 @@ class FirebaseSyncService {
           handleFirestoreError(error, OperationType.LIST, messagesPath);
         }
       );
-      this.unsubscribers.push(unsubSentMsgs);
+      this.userUnsubscribers.push(unsubSentMsgs);
 
-      // 4. Rental Applications
+      // 3. Rental Applications Listener (as applicant)
       const appsPath = 'applications';
-      const applicantQuery = query(
-        collection(firestoreDb, appsPath),
-        where('applicantId', '==', currentUserId)
-      );
       const unsubApplicant = onSnapshot(
-        applicantQuery,
+        query(collection(firestoreDb, appsPath), where('applicantId', '==', userId)),
         async snapshot => {
           const apps: RentalApplication[] = [];
           snapshot.forEach(docSnap => {
@@ -134,14 +188,11 @@ class FirebaseSyncService {
           handleFirestoreError(error, OperationType.LIST, appsPath);
         }
       );
-      this.unsubscribers.push(unsubApplicant);
+      this.userUnsubscribers.push(unsubApplicant);
 
-      const landlordAppQuery = query(
-        collection(firestoreDb, appsPath),
-        where('landlordId', '==', currentUserId)
-      );
+      // 4. Rental Applications Listener (as landlord)
       const unsubLandlordApps = onSnapshot(
-        landlordAppQuery,
+        query(collection(firestoreDb, appsPath), where('landlordId', '==', userId)),
         async snapshot => {
           const apps: RentalApplication[] = [];
           snapshot.forEach(docSnap => {
@@ -155,16 +206,12 @@ class FirebaseSyncService {
           handleFirestoreError(error, OperationType.LIST, appsPath);
         }
       );
-      this.unsubscribers.push(unsubLandlordApps);
+      this.userUnsubscribers.push(unsubLandlordApps);
 
-      // 5. Notifications
+      // 5. Notifications Listener
       const notifsPath = 'notifications';
-      const notifsQuery = query(
-        collection(firestoreDb, notifsPath),
-        where('userId', '==', currentUserId)
-      );
       const unsubNotifs = onSnapshot(
-        notifsQuery,
+        query(collection(firestoreDb, notifsPath), where('userId', '==', userId)),
         async snapshot => {
           const notifs: NotificationItem[] = [];
           snapshot.forEach(docSnap => {
@@ -178,14 +225,13 @@ class FirebaseSyncService {
           handleFirestoreError(error, OperationType.LIST, notifsPath);
         }
       );
-      this.unsubscribers.push(unsubNotifs);
+      this.userUnsubscribers.push(unsubNotifs);
 
-      // 6. If Admin, sync registered users directory
+      // 6. Registered Users Directory (Admin RBAC only)
       if (isAdmin) {
         const usersPath = 'users';
-        const usersQuery = query(collection(firestoreDb, usersPath));
         const unsubUsers = onSnapshot(
-          usersQuery,
+          collection(firestoreDb, usersPath),
           async snapshot => {
             const users: User[] = [];
             snapshot.forEach(docSnap => {
@@ -199,16 +245,20 @@ class FirebaseSyncService {
             handleFirestoreError(error, OperationType.LIST, usersPath);
           }
         );
-        this.unsubscribers.push(unsubUsers);
+        this.userUnsubscribers.push(unsubUsers);
       }
     } catch (err) {
-      console.warn('Sync initialization warning:', err);
+      console.warn('User sync setup warning:', err);
     }
   }
 
-  public stopSync() {
-    this.unsubscribers.forEach(unsub => unsub());
-    this.unsubscribers = [];
+  /**
+   * Stops authenticated user listeners, but keeps public sync running
+   */
+  public stopUserSync() {
+    this.userUnsubscribers.forEach(unsub => unsub());
+    this.userUnsubscribers = [];
+    this.currentSyncedUserId = null;
   }
 
   /**
@@ -233,18 +283,17 @@ class FirebaseSyncService {
           await dexieDb.offlineQueue.update(item.id, { status: 'syncing' });
 
           if (item.actionType === 'send_message') {
-            const message = item.payload as Message;
-            const path = `messages/${message.id}`;
+            const message = sanitizeForFirestore(item.payload as Message);
             await setDoc(doc(firestoreDb, 'messages', message.id), message);
             await dexieDb.messages.update(message.id, { status: 'sent' });
           } else if (item.actionType === 'create_listing') {
-            const property = item.payload as Property;
+            const property = sanitizeForFirestore(item.payload as Property);
             await setDoc(doc(firestoreDb, 'properties', property.id), property);
           } else if (item.actionType === 'update_listing') {
             const { id, updates } = item.payload;
-            await updateDoc(doc(firestoreDb, 'properties', id), updates);
+            await updateDoc(doc(firestoreDb, 'properties', id), sanitizeForFirestore(updates));
           } else if (item.actionType === 'submit_application') {
-            const app = item.payload as RentalApplication;
+            const app = sanitizeForFirestore(item.payload as RentalApplication);
             await setDoc(doc(firestoreDb, 'applications', app.id), app);
           }
 
