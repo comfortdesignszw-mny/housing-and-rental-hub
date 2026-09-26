@@ -36,8 +36,13 @@ export const Header: React.FC<HeaderProps> = ({
   }, [showAccountMenu]);
 
   const unreadCount = useLiveQuery(
-    () => db.notifications.where('read').equals(0 as any).count(),
-    []
+    async () => {
+      if (!currentUser || isGuest) return 0;
+      return db.notifications
+        .filter(n => n.userId === currentUser.id && !n.read)
+        .count();
+    },
+    [currentUser?.id, isGuest]
   ) || 0;
 
   const roleLabels: Record<UserRole, { label: string; badgeColor: string }> = {
@@ -106,12 +111,12 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Notifications Bell */}
           <button
             onClick={onOpenNotifications}
-            className="relative p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition active:scale-95"
+            className="relative p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition active:scale-95 cursor-pointer"
             title="Notifications"
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs ring-2 ring-white animate-pulse">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}

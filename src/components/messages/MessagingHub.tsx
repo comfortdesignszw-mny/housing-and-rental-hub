@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db as firestoreDb } from '../../db/firebase';
+import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
 import { offlineSyncService } from '../../services/offlineSync';
 
 interface MessagingHubProps {
@@ -238,13 +238,23 @@ export const MessagingHub: React.FC<MessagingHubProps> = ({
     };
 
     // Optimistically cache locally in Dexie
-    await db.messages.add(newMsg);
+    await db.messages.put(newMsg);
     setDecryptedMap(prev => ({ ...prev, [messageId]: rawContent }));
 
-    // Send to Firestore if online, otherwise enqueue
+    // Send to Firestore if online, otherwise enqueue for offline background sync
     if (isOnline) {
       try {
-        await setDoc(doc(firestoreDb, 'messages', messageId), newMsg);
+        const cleanMsg = sanitizeForFirestore(newMsg);
+        await setDoc(doc(firestoreDb, 'messages', messageId), cleanMsg);
+
+        // Update conversation summary for realtime list view
+        const cleanConv = sanitizeForFirestore({
+          id: convId,
+          participantIds: [currentUser.id, activeRecipientId],
+          lastMessageTime: Date.now(),
+          lastMessagePreview: rawContent.substring(0, 100),
+        });
+        await setDoc(doc(firestoreDb, 'conversations', convId), cleanConv, { merge: true });
       } catch (err) {
         console.warn('Direct firestore send failed, enqueueing offline:', err);
         await offlineSyncService.enqueueAction('send_message', newMsg);
@@ -288,16 +298,39 @@ export const MessagingHub: React.FC<MessagingHubProps> = ({
 
   if (isGuest) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-800 mx-auto flex items-center justify-center">
-          <MessageSquare className="w-8 h-8" />
+      <div className="max-w-xl mx-auto px-4 py-12 text-center">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-100 shadow-2xs">
+            <MessageSquare className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg font-extrabold text-slate-900">
+              In-App Messaging
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+              You are not registered to engage on in-app messaging with Landlords or Property Managers, sign up or login to access the messaging feature or go to listings, choose the property you need and use WhatsApp instead.
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={onNavigateToListings}
+              className="w-full sm:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Home className="w-4 h-4" />
+              <span>Browse Listings</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenAuthModal}
+              className="w-full sm:w-auto px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 active:scale-98 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2"
+            >
+              <LogIn className="w-4 h-4 text-emerald-700" />
+              <span>Sign In / Login</span>
+            </button>
+          </div>
         </div>
-        <h2 className="text-xl font-extrabold text-slate-900">
-          Real-Time WhatsApp-Style Messaging
-        </h2>
-        <p className="text-sm text-slate-600 max-w-md mx-auto">
-          Sign in to access encrypted peer-to-peer chats with Zimbabwean landlords, roommates, and tenants with read receipts and offline queuing.
-        </p>
       </div>
     );
   }

@@ -193,6 +193,54 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => 
     return matchSearch && matchRole;
   });
 
+  // In Guest Mode: Just show the Guest Explorer card without internal database metrics or cache controls
+  if (isGuest) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-10 space-y-4">
+        {/* Toast Feedback */}
+        {toastMessage && (
+          <div className="bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md flex items-center justify-between animate-in fade-in duration-150">
+            <span>{toastMessage}</span>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="text-slate-400 hover:text-white ml-2 text-xs font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-xs text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-800 text-2xl font-bold flex items-center justify-center mx-auto shadow-2xs">
+            G
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-extrabold text-slate-900">
+              Guest Explorer
+            </h2>
+            <span className="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase border border-slate-200">
+              Guest Mode
+            </span>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto leading-relaxed pt-1">
+              You are currently browsing Comfort Housing in guest mode. Sign in or register to publish rental properties, apply directly, and connect with verified roommates across Zimbabwe.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={onOpenAuthModal}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Sign In / Create Account</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 space-y-5">
       {/* Toast Feedback */}
@@ -204,28 +252,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => 
             className="text-slate-400 hover:text-white ml-2 text-xs font-bold cursor-pointer"
           >
             ✕
-          </button>
-        </div>
-      )}
-
-      {/* Guest Mode Callout */}
-      {isGuest && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div>
-            <h3 className="font-extrabold text-sm text-emerald-950 flex items-center gap-1.5">
-              <span>Browsing in Guest Mode</span>
-            </h3>
-            <p className="text-xs text-emerald-800 mt-0.5">
-              Sign in or create an account with Firebase Authentication to list properties, apply, and access secure chat.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenAuthModal}
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-          >
-            <LogIn className="w-3.5 h-3.5" />
-            <span>Sign In / Register</span>
           </button>
         </div>
       )}

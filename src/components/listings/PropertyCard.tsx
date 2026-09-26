@@ -12,16 +12,19 @@ import {
   CheckCircle2,
   Clock,
   Eye,
+  MessageSquare,
 } from 'lucide-react';
 import { db } from '../../db/db';
 import { useAuth } from '../../context/AuthContext';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { recordPropertyView } from '../../services/statsService';
 
 interface PropertyCardProps {
   property: Property;
   onSelect: (property: Property) => void;
   onToggleCompare: (property: Property) => void;
   onApply?: (property: Property) => void;
+  onMessageOwner?: (property: Property) => void;
   isCompared: boolean;
 }
 
@@ -30,6 +33,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   onSelect,
   onToggleCompare,
   onApply,
+  onMessageOwner,
   isCompared,
 }) => {
   const { currentUser } = useAuth();
@@ -99,7 +103,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
   return (
     <div
-      onClick={() => onSelect(property)}
+      onClick={() => {
+        recordPropertyView(property.id, 'expand_details');
+        onSelect(property);
+      }}
       className="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col relative"
     >
       {/* Photo Container */}
@@ -263,23 +270,40 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             </span>
           </div>
 
-          {/* Quick Apply CTA button */}
-          <button
-            type="button"
-            onClick={e => {
-              e.stopPropagation();
-              if (onApply) onApply(property);
-              else onSelect(property);
-            }}
-            disabled={property.availability === 'Occupied'}
-            className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer ${
-              property.availability === 'Occupied'
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-            }`}
-          >
-            <span>{property.availability === 'Occupied' ? 'Property Occupied' : 'Apply for Rental'}</span>
-          </button>
+          {/* Action Buttons: Apply for Rental and Message Listing's Owner */}
+          <div className="flex flex-col sm:flex-row gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                recordPropertyView(property.id, 'apply_click');
+                if (onApply) onApply(property);
+                else onSelect(property);
+              }}
+              disabled={property.availability === 'Occupied'}
+              className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer ${
+                property.availability === 'Occupied'
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+              }`}
+            >
+              <span>{property.availability === 'Occupied' ? 'Property Taken' : 'Apply for Rental'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                recordPropertyView(property.id, 'chat_click');
+                if (onMessageOwner) onMessageOwner(property);
+              }}
+              className="py-2 px-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 border border-slate-300 hover:border-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/50 text-slate-700 transition active:scale-98 cursor-pointer shrink-0"
+              title="Chat directly with the owner or manager of this listing"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Message Owner</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

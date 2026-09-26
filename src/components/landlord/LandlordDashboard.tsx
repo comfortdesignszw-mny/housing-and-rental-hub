@@ -3,6 +3,9 @@ import { Property, Tenant, RentPayment, RentalApplication } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
+import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { offlineSyncService } from '../../services/offlineSync';
 import { TenantManagement } from './TenantManagement';
 import { RentCollection } from './RentCollection';
 import { LeaseManagement } from './LeaseManagement';
@@ -148,22 +151,44 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
 
   // One-tap toggle Taken / Occupied (24hr countdown)
   const handleToggleOccupied = async (property: Property) => {
-    if (property.availability === 'Occupied') {
-      await db.properties.update(property.id, {
-        availability: 'Immediate',
-        occupiedAt: undefined,
-        updatedAt: Date.now(),
-      });
+    const isNowOccupied = property.availability !== 'Occupied';
+    const now = Date.now();
+
+    if (!isNowOccupied) {
+      const updates = {
+        availability: 'Immediate' as const,
+        occupiedAt: 0,
+        updatedAt: now,
+      };
+
+      await db.properties.update(property.id, updates);
+
+      try {
+        await updateDoc(doc(firestoreDb, 'properties', property.id), sanitizeForFirestore(updates));
+      } catch (err) {
+        console.warn('Could not sync availability update online, enqueued:', err);
+        await offlineSyncService.enqueueAction('update_listing', { id: property.id, ...updates });
+      }
+
       showNotice(`"${property.name}" is now marked Available and active in public search.`);
     } else {
-      const now = Date.now();
-      await db.properties.update(property.id, {
-        availability: 'Occupied',
+      const updates = {
+        availability: 'Occupied' as const,
         occupiedAt: now,
         updatedAt: now,
-      });
+      };
+
+      await db.properties.update(property.id, updates);
+
+      try {
+        await updateDoc(doc(firestoreDb, 'properties', property.id), sanitizeForFirestore(updates));
+      } catch (err) {
+        console.warn('Could not sync availability update online, enqueued:', err);
+        await offlineSyncService.enqueueAction('update_listing', { id: property.id, ...updates });
+      }
+
       showNotice(
-        `"${property.name}" marked Taken/Occupied. It will remain visible for 24 hours then automatically disappear from public search.`
+        `"${property.name}" marked Taken/Occupied. It will remain visible for 24 hours in listings then automatically archive from public search.`
       );
     }
   };

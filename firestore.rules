@@ -112,12 +112,22 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(propertyId) && isValidProperty(incoming()) &&
         (incoming().landlordId == request.auth.uid || isAdmin());
 
-      allow update: if isSignedIn() && isValidId(propertyId) && isValidProperty(incoming()) && (
-        isAdmin() ||
+      allow update: if isValidId(propertyId) && (
+        // Allow visitors to record view count and user ratings
         (
-          existing().landlordId == request.auth.uid &&
-          incoming().landlordId == existing().landlordId &&
-          incoming().createdAt == existing().createdAt
+          incoming().diff(existing()).affectedKeys().hasOnly(['views']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'ratingCount']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['views', 'rating', 'ratingCount', 'updatedAt'])
+        ) ||
+        (
+          isSignedIn() && isValidProperty(incoming()) && (
+            isAdmin() ||
+            (
+              existing().landlordId == request.auth.uid &&
+              incoming().landlordId == existing().landlordId &&
+              incoming().createdAt == existing().createdAt
+            )
+          )
         )
       );
 

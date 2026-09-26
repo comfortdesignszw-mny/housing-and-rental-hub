@@ -403,6 +403,7 @@ export const PropertyList: React.FC<PropertyListProps> = ({
               property={property}
               onSelect={p => setSelectedProperty(p)}
               onApply={p => setApplyingProperty(p)}
+              onMessageOwner={p => onStartChat(p.landlordId, p.landlordName, p.id)}
               onToggleCompare={toggleCompare}
               isCompared={comparedProperties.some(c => c.id === property.id)}
             />

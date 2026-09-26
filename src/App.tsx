@@ -87,7 +87,7 @@ function MainAppContent() {
           <RoommateHub onStartChat={handleStartChat} />
         )}
 
-        {currentTab === 'landlord' && (
+        {currentTab === 'landlord' && !isGuest && (
           <LandlordDashboard
             onOpenCreateListing={handleOpenCreateListing}
             onStartChat={handleStartChat}
@@ -103,6 +103,8 @@ function MainAppContent() {
               setChatRecipientId(null);
               setChatRecipientName(null);
             }}
+            onNavigateToListings={() => setCurrentTab('listings')}
+            onOpenAuthModal={() => setShowAuthModal(true)}
           />
         )}
 
@@ -131,6 +133,9 @@ function MainAppContent() {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
+        onAuthenticated={() => {
+          setCurrentTab('profile');
+        }}
       />
     </div>
   );

@@ -59,21 +59,17 @@ class FirebaseSyncService {
       collection(firestoreDb, propertiesPath),
       async snapshot => {
         try {
-          const cloudIds = new Set<string>();
           const props: Property[] = [];
-
           snapshot.forEach(docSnap => {
-            cloudIds.add(docSnap.id);
             props.push(docSnap.data() as Property);
           });
 
-          // Reconcile removed properties from IndexedDB
-          const localProps = await dexieDb.properties.toArray();
-          for (const lp of localProps) {
-            if (!cloudIds.has(lp.id)) {
-              await dexieDb.properties.delete(lp.id);
+          // Only delete specific documents that were explicitly removed on Firestore
+          snapshot.docChanges().forEach(async change => {
+            if (change.type === 'removed') {
+              await dexieDb.properties.delete(change.doc.id);
             }
-          }
+          });
 
           if (props.length > 0) {
             await dexieDb.properties.bulkPut(props);
@@ -94,21 +90,17 @@ class FirebaseSyncService {
       collection(firestoreDb, roommatesPath),
       async snapshot => {
         try {
-          const cloudIds = new Set<string>();
           const profiles: RoommateProfile[] = [];
-
           snapshot.forEach(docSnap => {
-            cloudIds.add(docSnap.id);
             profiles.push(docSnap.data() as RoommateProfile);
           });
 
-          // Reconcile removed roommate profiles from IndexedDB
-          const localProfiles = await dexieDb.roommateProfiles.toArray();
-          for (const lp of localProfiles) {
-            if (!cloudIds.has(lp.id)) {
-              await dexieDb.roommateProfiles.delete(lp.id);
+          // Only delete specific documents that were explicitly removed on Firestore
+          snapshot.docChanges().forEach(async change => {
+            if (change.type === 'removed') {
+              await dexieDb.roommateProfiles.delete(change.doc.id);
             }
-          }
+          });
 
           if (profiles.length > 0) {
             await dexieDb.roommateProfiles.bulkPut(profiles);

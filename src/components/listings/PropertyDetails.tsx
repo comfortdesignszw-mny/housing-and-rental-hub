@@ -23,6 +23,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../db/db';
 import { offlineSyncService } from '../../services/offlineSync';
+import { recordPropertyView, recordPropertyRating } from '../../services/statsService';
 
 interface PropertyDetailsProps {
   property: Property;
@@ -54,9 +55,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
   // Track real views on mount
   React.useEffect(() => {
     if (property.id) {
-      db.properties.where('id').equals(property.id).modify(p => {
-        p.views = (p.views || 0) + 1;
-      });
+      recordPropertyView(property.id, 'expand_details');
     }
   }, [property.id]);
 
@@ -71,10 +70,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
     const newCount = prevCount + 1;
     const updatedRating = prevCount === 0 ? stars : Number(((prevRating * prevCount + stars) / newCount).toFixed(1));
 
-    await db.properties.update(property.id, {
-      rating: updatedRating,
-      ratingCount: newCount,
-    });
+    await recordPropertyRating(property.id, updatedRating, newCount);
     showToast(`Real rating recorded! You rated ${stars} stars.`);
   };
 
@@ -433,6 +429,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
             <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <a
                 href={`tel:${cleanPhone}`}
+                onClick={() => recordPropertyView(property.id, 'cta_click')}
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-white text-slate-900 hover:bg-slate-100 text-xs font-bold px-3 py-2 rounded-xl transition"
               >
                 <Phone className="w-3.5 h-3.5" />
@@ -443,6 +440,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
                 href={`https://wa.me/${cleanPhone}?text=Hello, I am inquiring about your property "${property.name}" on Comfort Housing Hub.`}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => recordPropertyView(property.id, 'cta_click')}
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition"
               >
                 WhatsApp
@@ -450,6 +448,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
 
               <button
                 onClick={() => {
+                  recordPropertyView(property.id, 'chat_click');
                   onClose();
                   onStartChat(property.landlordId, property.landlordName, property.id);
                 }}
@@ -474,8 +473,11 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowApplyModal(true)}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-sm transition active:scale-95"
+              onClick={() => {
+                recordPropertyView(property.id, 'apply_click');
+                setShowApplyModal(true);
+              }}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-sm transition active:scale-95 cursor-pointer"
             >
               Apply for Rental
             </button>
