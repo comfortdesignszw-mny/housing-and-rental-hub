@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { X, Lock, Mail, User, Phone, Building2, Home, Users, ArrowRight } from 'lucide-react';
+import { X, Lock, Mail, User, Phone, Building2, Home, Users, ArrowRight, Briefcase } from 'lucide-react';
 import { UserRole } from '../../types';
 import { phoneToVirtualEmail } from '../../utils/phoneAuth';
 
@@ -21,7 +21,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [role, setRole] = useState<'tenant' | 'landlord' | 'property_manager'>('tenant');
+  const [role, setRole] = useState<'tenant' | 'landlord' | 'property_manager' | 'agent'>('tenant');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -198,12 +198,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
               <label className="block text-xs font-extrabold text-slate-800">
                 1. Select Account Type:
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {/* Tenant Card */}
                 <button
                   type="button"
                   onClick={() => setRole('tenant')}
-                  className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                  className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
                     role === 'tenant'
                       ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/20 text-emerald-950'
                       : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
@@ -216,7 +216,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
                   <div>
                     <h4 className="font-extrabold text-xs">Tenant</h4>
                     <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
-                      Rent homes, rooms & find roommates
+                      Rent homes & rooms
                     </p>
                   </div>
                 </button>
@@ -225,7 +225,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
                 <button
                   type="button"
                   onClick={() => setRole('landlord')}
-                  className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                  className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
                     role === 'landlord'
                       ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/20 text-emerald-950'
                       : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
@@ -238,7 +238,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
                   <div>
                     <h4 className="font-extrabold text-xs">Landlord</h4>
                     <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
-                      List & lease your own properties
+                      Lease own properties
                     </p>
                   </div>
                 </button>
@@ -247,7 +247,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
                 <button
                   type="button"
                   onClick={() => setRole('property_manager')}
-                  className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                  className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
                     role === 'property_manager'
                       ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/20 text-emerald-950'
                       : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
@@ -258,9 +258,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
                     <span className={`w-2 h-2 rounded-full ${role === 'property_manager' ? 'bg-emerald-600' : 'bg-transparent'}`} />
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-xs">Property Manager</h4>
+                    <h4 className="font-extrabold text-xs">Manager</h4>
                     <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
-                      Agencies & property companies
+                      Property companies
+                    </p>
+                  </div>
+                </button>
+
+                {/* An Agent (Requirement 3) */}
+                <button
+                  type="button"
+                  onClick={() => setRole('agent')}
+                  className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    role === 'agent'
+                      ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/20 text-emerald-950'
+                      : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <Briefcase className={`w-4 h-4 ${role === 'agent' ? 'text-emerald-700' : 'text-slate-400'}`} />
+                    <span className={`w-2 h-2 rounded-full ${role === 'agent' ? 'bg-emerald-600' : 'bg-transparent'}`} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs">An Agent</h4>
+                    <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                      Rentals & sales agent
                     </p>
                   </div>
                 </button>
@@ -304,18 +326,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
           <form onSubmit={handleSubmit} className="space-y-3 text-xs pt-1">
             {mode === 'signup' && (
               <>
-                {/* Property Manager Company Name */}
-                {role === 'property_manager' && (
+                {/* Property Manager or Agent Company / Agency Name */}
+                {(role === 'property_manager' || role === 'agent') && (
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Company / Agency Name <span className="text-rose-500">*</span>
+                      {role === 'agent' ? 'Real Estate Agency / Trading Name (Optional)' : 'Company / Agency Name'}{' '}
+                      {role === 'property_manager' && <span className="text-rose-500">*</span>}
                     </label>
                     <div className="relative">
-                      <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      {role === 'agent' ? (
+                        <Briefcase className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      ) : (
+                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      )}
                       <input
                         type="text"
-                        required
-                        placeholder="e.g. Zimbabwe Property Portfolio Ltd"
+                        required={role === 'property_manager'}
+                        placeholder={
+                          role === 'agent'
+                            ? 'e.g. Makoni Real Estate Agents'
+                            : 'e.g. Zimbabwe Property Portfolio Ltd'
+                        }
                         value={companyName}
                         onChange={e => setCompanyName(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden"

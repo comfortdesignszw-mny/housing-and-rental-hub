@@ -41,7 +41,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentTab, onTabChange 
     },
     {
       id: 'landlord' as NavTab,
-      label: role === 'tenant' ? 'My Tenancy' : 'Landlord Hub',
+      label: role === 'tenant' ? 'My Tenancy' : role === 'agent' ? 'Agent Hub' : 'Landlord Hub',
       icon: Building2,
       badge: null,
     },

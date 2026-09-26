@@ -19,6 +19,10 @@ import {
   Zap,
   Calculator,
   ExternalLink,
+  Tag,
+  Home,
+  Briefcase,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../db/db';
@@ -101,10 +105,21 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
         {/* Header Bar */}
         <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
+            {property.listingCategory === 'sale' ? (
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black uppercase flex items-center gap-1 shadow-xs">
+                <Tag className="w-3 h-3 stroke-[2.5]" />
+                For Sale
+              </span>
+            ) : (
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold uppercase flex items-center gap-1 shadow-xs">
+                <Home className="w-3 h-3 stroke-[2.5]" />
+                For Rent
+              </span>
+            )}
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
               {property.propertyType}
             </span>
-            <span className="text-xs text-slate-300">
+            <span className="text-xs text-slate-300 hidden sm:inline">
               {property.suburb}, {property.city}
             </span>
           </div>
@@ -245,22 +260,47 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
             </div>
 
             <div className="sm:text-right shrink-0">
-              <div className="flex items-baseline sm:justify-end gap-1.5">
-                <span className="text-2xl font-black text-emerald-800">
-                  ${property.rentUsd}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {property.rentBasis ? `/${property.rentBasis.replace('per ', '')}` : '/month'}
-                </span>
+              <div className="flex items-baseline sm:justify-end gap-1.5 flex-wrap">
+                {property.listingCategory === 'sale' ? (
+                  <>
+                    <span className="text-2xl font-black text-amber-800">
+                      ${(property.askingPriceUsd || property.rentUsd).toLocaleString()}
+                    </span>
+                    <span className="text-xs font-semibold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                      {property.paymentType || 'Once off payment'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-2xl font-black text-emerald-800">
+                      ${property.rentUsd}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {property.rentBasis ? `/${property.rentBasis.replace('per ', '')}` : '/month'}
+                    </span>
+                  </>
+                )}
               </div>
               {property.rentZig && (
                 <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md inline-block mt-0.5 border border-emerald-200">
                   ~ZiG {property.rentZig.toLocaleString()}
                 </div>
               )}
-              <p className="text-[11px] text-slate-500 mt-1">
-                Deposit: ${property.depositUsd} (Refundable)
-              </p>
+              {property.listingCategory === 'sale' ? (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Payment: {property.paymentType || 'Once off payment'}
+                </p>
+              ) : (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Deposit: ${property.depositUsd} (Refundable)
+                </p>
+              )}
+              {property.agentFeeUsd ? (
+                <p className="text-[11px] text-indigo-700 font-semibold mt-0.5 flex items-center justify-end gap-1">
+                  <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Agent Fee: ${property.agentFeeUsd.toLocaleString()}</span>
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -430,7 +470,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
               <a
                 href={`tel:${cleanPhone}`}
                 onClick={() => recordPropertyView(property.id, 'cta_click')}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-white text-slate-900 hover:bg-slate-100 text-xs font-bold px-3 py-2 rounded-xl transition"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-white text-slate-900 hover:bg-slate-100 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer"
               >
                 <Phone className="w-3.5 h-3.5" />
                 Call
@@ -441,7 +481,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => recordPropertyView(property.id, 'cta_click')}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer"
               >
                 WhatsApp
               </a>
@@ -452,23 +492,40 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
                   onClose();
                   onStartChat(property.landlordId, property.landlordName, property.id);
                 }}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition border border-slate-700"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition border border-slate-700 cursor-pointer"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 App Chat
               </button>
             </div>
           </div>
+
+          {/* Sales Transaction Disclaimer Note (Requirement 2) */}
+          {property.listingCategory === 'sale' && (
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-950 space-y-1.5 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                <span className="font-extrabold text-xs">
+                  Important Sales & Legal Paperwork Disclaimer:
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed text-amber-900 font-medium">
+                On selling properties, verify all paperwork and proof of payments and make sure you make Agreements of Sale documents before any transactions is finalised. This application does not guarantee any Agreement of Sale or Proof of Payment whatsoever.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer Fixed Actions */}
         <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
           <div className="text-xs">
-            <span className="text-slate-500">Rent: </span>
-            <span className="font-extrabold text-slate-900 text-base">
-              ${property.rentUsd}
+            <span className="text-slate-500">
+              {property.listingCategory === 'sale' ? 'Asking Price: ' : 'Rent: '}
             </span>
-            <span className="text-slate-400">/mo</span>
+            <span className="font-extrabold text-slate-900 text-base">
+              ${(property.askingPriceUsd || property.rentUsd).toLocaleString()}
+            </span>
+            {property.listingCategory !== 'sale' && <span className="text-slate-400">/mo</span>}
           </div>
 
           <div className="flex items-center gap-2">
@@ -479,7 +536,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
               }}
               className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-sm transition active:scale-95 cursor-pointer"
             >
-              Apply for Rental
+              {property.listingCategory === 'sale' ? 'Inquire to Purchase' : 'Apply for Rental'}
             </button>
           </div>
         </div>

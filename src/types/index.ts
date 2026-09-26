@@ -1,4 +1,4 @@
-export type UserRole = 'tenant' | 'landlord' | 'property_manager' | 'admin' | 'guest';
+export type UserRole = 'tenant' | 'landlord' | 'property_manager' | 'agent' | 'admin' | 'guest';
 
 export interface User {
   id: string;
@@ -33,6 +33,10 @@ export type AvailabilityStatus = 'Immediate' | 'Next Month' | 'From Date' | 'Occ
 
 export type RentBasis = 'per month' | 'per room' | 'per house' | 'per space' | 'per bed';
 
+export type ListingCategory = 'rental' | 'sale';
+
+export type SalePaymentType = 'Once off payment' | 'Installments' | 'Negotiable';
+
 export interface Property {
   id: string;
   landlordId: string;
@@ -41,10 +45,17 @@ export interface Property {
   landlordEmail?: string;
   name: string;
   propertyType: PropertyType;
-  rentUsd: number;
+  listingCategory?: ListingCategory; // 'rental' (default) or 'sale'
+  askingPriceUsd?: number; // For sale properties
+  paymentType?: SalePaymentType; // 'Once off payment', 'Installments', 'Negotiable'
+  rentUsd: number; // Monthly rent for rentals, or base/asking value
   rentZig?: number;
   rentBasis?: RentBasis;
   depositUsd: number;
+  isAgentListing?: boolean;
+  agentFeeUsd?: number; // Up to 10% of rent for rental, up to 2% of price for sale
+  agentFeePercentage?: number;
+  agentName?: string;
   province: string;
   city: string;
   town?: string;

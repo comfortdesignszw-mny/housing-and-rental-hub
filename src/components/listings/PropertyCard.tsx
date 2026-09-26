@@ -13,6 +13,9 @@ import {
   Clock,
   Eye,
   MessageSquare,
+  Home,
+  Tag,
+  Briefcase,
 } from 'lucide-react';
 import { db } from '../../db/db';
 import { useAuth } from '../../context/AuthContext';
@@ -129,9 +132,28 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
         {/* Top Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1 items-center">
+          {/* Badge whether For Sale or For Rent (Requirement 2) */}
+          {property.listingCategory === 'sale' ? (
+            <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center gap-1 uppercase tracking-wide">
+              <Tag className="w-2.5 h-2.5 stroke-[2.5]" />
+              For Sale
+            </span>
+          ) : (
+            <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs flex items-center gap-1 uppercase tracking-wide">
+              <Home className="w-2.5 h-2.5 stroke-[2.5]" />
+              For Rent
+            </span>
+          )}
+
           <span className="bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2 py-0.5 rounded-lg">
             {property.propertyType}
           </span>
+          {property.isAgentListing && (
+            <span className="bg-indigo-600/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-xs">
+              <Briefcase className="w-2.5 h-2.5" />
+              Agent
+            </span>
+          )}
           {property.availability === 'Occupied' ? (
             <span className="bg-rose-600/95 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 shadow-xs">
               <Clock className="w-2.5 h-2.5" />
@@ -207,13 +229,26 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         <div>
           {/* Price */}
           <div className="flex items-baseline justify-between mb-1">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black text-slate-900 tracking-tight">
-                ${property.rentUsd}
-              </span>
-              <span className="text-xs text-slate-500 font-normal">
-                {property.rentBasis ? ` ${property.rentBasis}` : '/month'}
-              </span>
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              {property.listingCategory === 'sale' ? (
+                <>
+                  <span className="text-lg font-black text-slate-900 tracking-tight">
+                    ${(property.askingPriceUsd || property.rentUsd).toLocaleString()}
+                  </span>
+                  <span className="text-[11px] font-medium text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200">
+                    {property.paymentType || 'Once off payment'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg font-black text-slate-900 tracking-tight">
+                    ${property.rentUsd}
+                  </span>
+                  <span className="text-xs text-slate-500 font-normal">
+                    {property.rentBasis ? ` ${property.rentBasis}` : '/month'}
+                  </span>
+                </>
+              )}
             </div>
             {property.rentZig && (
               <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50">
@@ -221,6 +256,17 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
               </span>
             )}
           </div>
+
+          {/* Agent Fee Note if available */}
+          {property.agentFeeUsd ? (
+            <div className="text-[10px] text-indigo-700 font-semibold flex items-center gap-1 mb-1">
+              <Briefcase className="w-3 h-3 text-indigo-600" />
+              <span>
+                Agent Fee: ${property.agentFeeUsd.toLocaleString()}
+                {property.agentFeePercentage ? ` (${property.agentFeePercentage}%)` : ''}
+              </span>
+            </div>
+          ) : null}
 
           {/* Title */}
           <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-emerald-700 transition">
@@ -266,11 +312,13 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             </div>
 
             <span className="text-[11px] text-slate-400">
-              Deposit: ${property.depositUsd}
+              {property.listingCategory === 'sale'
+                ? `Terms: ${property.paymentType || 'Once off'}`
+                : `Deposit: $${property.depositUsd}`}
             </span>
           </div>
 
-          {/* Action Buttons: Apply for Rental and Message Listing's Owner */}
+          {/* Action Buttons: Apply / Inquire and Message Listing's Owner */}
           <div className="flex flex-col sm:flex-row gap-1.5 pt-0.5">
             <button
               type="button"
@@ -284,10 +332,20 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
               className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer ${
                 property.availability === 'Occupied'
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : property.listingCategory === 'sale'
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
               }`}
             >
-              <span>{property.availability === 'Occupied' ? 'Property Taken' : 'Apply for Rental'}</span>
+              <span>
+                {property.availability === 'Occupied'
+                  ? property.listingCategory === 'sale'
+                    ? 'Property Sold'
+                    : 'Property Taken'
+                  : property.listingCategory === 'sale'
+                  ? 'Inquire to Buy'
+                  : 'Apply for Rental'}
+              </span>
             </button>
 
             <button

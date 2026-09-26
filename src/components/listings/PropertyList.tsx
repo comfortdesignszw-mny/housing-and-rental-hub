@@ -18,6 +18,8 @@ import {
   Plus,
   Building,
   RotateCcw,
+  Tag,
+  Home,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ZIMBABWE_PROVINCES, getAllCitiesAndTowns } from '../../data/zimbabweLocations';
@@ -34,6 +36,7 @@ export const PropertyList: React.FC<PropertyListProps> = ({
   const { role, currentUser } = useAuth();
 
   // Search & Filter State
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'rental' | 'sale'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<string>('All');
   const [selectedProvince, setSelectedProvince] = useState<string>('All');
@@ -83,6 +86,12 @@ export const PropertyList: React.FC<PropertyListProps> = ({
         if (elapsed >= 24 * 60 * 60 * 1000) {
           return false; // Disappears from active listings after 24h
         }
+      }
+
+      // Filter by Listing Category (All vs Rental vs Sale)
+      if (categoryFilter !== 'all') {
+        const cat = property.listingCategory || 'rental';
+        if (cat !== categoryFilter) return false;
       }
 
       if (onlySaved && !savedListingIds.includes(property.id)) {

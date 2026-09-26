@@ -46,7 +46,7 @@ service cloud.firestore {
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
         data.email is string && data.email.size() <= 150 &&
-        data.role in ['tenant', 'landlord', 'property_manager', 'admin', 'guest'] &&
+        data.role in ['tenant', 'landlord', 'property_manager', 'agent', 'admin', 'guest'] &&
         data.createdAt is number &&
         (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
         (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30)) &&

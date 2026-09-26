@@ -127,6 +127,24 @@ function MainAppContent() {
       <NotificationsDrawer
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
+        onSelectAction={(url) => {
+          setShowNotifications(false);
+          if (url?.startsWith('messages')) {
+            const queryPart = url.includes('?') ? url.split('?')[1] : '';
+            const params = new URLSearchParams(queryPart);
+            const userId = params.get('user');
+            const userName = params.get('name') || 'User';
+            if (userId) {
+              handleStartChat(userId, decodeURIComponent(userName));
+            } else {
+              setCurrentTab('messages');
+            }
+          } else if (url?.startsWith('landlord')) {
+            setCurrentTab('landlord');
+          } else if (url?.startsWith('listings')) {
+            setCurrentTab('listings');
+          }
+        }}
       />
 
       {/* Firebase Authentication Modal */}

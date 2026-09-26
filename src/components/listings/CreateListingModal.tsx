@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { Property, PropertyType, AvailabilityStatus, RentBasis } from '../../types';
+import {
+  Property,
+  PropertyType,
+  AvailabilityStatus,
+  RentBasis,
+  ListingCategory,
+  SalePaymentType,
+} from '../../types';
 import {
   ZIMBABWE_PROVINCES,
   getCitiesByProvince,
@@ -15,14 +22,13 @@ import {
   X,
   Upload,
   Image as ImageIcon,
-  Sun,
-  Droplet,
-  Wifi,
-  Shield,
-  Car,
   CheckCircle2,
   AlertCircle,
-  Trash2,
+  Home,
+  Tag,
+  Briefcase,
+  DollarSign,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface CreateListingModalProps {
@@ -40,20 +46,46 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
   const isEdit = !!propertyToEdit;
 
+  // Category: Rental or For Sale (Requirement 2)
+  const [listingCategory, setListingCategory] = useState<ListingCategory>(
+    propertyToEdit?.listingCategory || 'rental'
+  );
+
   const [name, setName] = useState(propertyToEdit?.name || '');
   const [propertyType, setPropertyType] = useState<PropertyType>(
-    propertyToEdit?.propertyType || 'Cottage'
+    propertyToEdit?.propertyType || 'House'
   );
   const [roomsAvailable, setRoomsAvailable] = useState<number>(
     propertyToEdit?.roomsAvailable || 1
   );
-  const [rentUsd, setRentUsd] = useState<number>(propertyToEdit?.rentUsd || 250);
+
+  // Rental specific pricing
+  const [rentUsd, setRentUsd] = useState<number>(propertyToEdit?.rentUsd || 350);
   const [rentBasis, setRentBasis] = useState<RentBasis>(
     propertyToEdit?.rentBasis || 'per month'
   );
   const [depositUsd, setDepositUsd] = useState<number>(
-    propertyToEdit?.depositUsd || 250
+    propertyToEdit?.depositUsd || 350
   );
+
+  // Sale specific pricing
+  const [askingPriceUsd, setAskingPriceUsd] = useState<number>(
+    propertyToEdit?.askingPriceUsd ||
+      (propertyToEdit?.listingCategory === 'sale' ? propertyToEdit.rentUsd : 55000)
+  );
+  const [paymentType, setPaymentType] = useState<SalePaymentType>(
+    propertyToEdit?.paymentType || 'Once off payment'
+  );
+
+  // Agent Fee fields (Requirement 3)
+  const isUserAgent = currentUser?.role === 'agent' || currentUser?.role === 'property_manager';
+  const [isAgentListing, setIsAgentListing] = useState<boolean>(
+    propertyToEdit?.isAgentListing ?? isUserAgent
+  );
+  const [agentFeeUsd, setAgentFeeUsd] = useState<number>(
+    propertyToEdit?.agentFeeUsd || 0
+  );
+
   const [selectedProvince, setSelectedProvince] = useState<string>(
     propertyToEdit?.province || 'Harare'
   );
@@ -65,8 +97,8 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
   );
   const [customSuburb, setCustomSuburb] = useState<string>('');
   const [address, setAddress] = useState<string>(propertyToEdit?.address || '');
-  const [bedrooms, setBedrooms] = useState<number>(propertyToEdit?.bedrooms || 1);
-  const [bathrooms, setBathrooms] = useState<number>(propertyToEdit?.bathrooms || 1);
+  const [bedrooms, setBedrooms] = useState<number>(propertyToEdit?.bedrooms || 3);
+  const [bathrooms, setBathrooms] = useState<number>(propertyToEdit?.bathrooms || 2);
   const [availability, setAvailability] = useState<AvailabilityStatus>(
     propertyToEdit?.availability || 'Immediate'
   );
@@ -77,7 +109,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     propertyToEdit?.description || ''
   );
 
-  // Selected amenities - strictly physically chosen by landlord, never pre-populated with unverified amenities
+  // Selected amenities
   const [amenities, setAmenities] = useState<string[]>(
     propertyToEdit?.amenities || []
   );
@@ -87,6 +119,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
   const [photos, setPhotos] = useState<string[]>(propertyToEdit?.photos || []);
   const [compressing, setCompressing] = useState<boolean>(false);
   const [compressStats, setCompressStats] = useState<string>('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const propertyTypes: PropertyType[] = [
     'House',
@@ -144,6 +177,23 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     }
   };
 
+  // Agent fee calculations (Requirement 3: max 10% on rental, max 2% on sale)
+  const maxAgentFeeAllowed =
+    listingCategory === 'rental'
+      ? Math.round(Number(rentUsd || 0) * 0.1)
+      : Math.round(Number(askingPriceUsd || 0) * 0.02);
+
+  const currentAgentFeePercentage =
+    listingCategory === 'rental'
+      ? rentUsd > 0
+        ? Number(((agentFeeUsd / rentUsd) * 100).toFixed(1))
+        : 0
+      : askingPriceUsd > 0
+      ? Number(((agentFeeUsd / askingPriceUsd) * 100).toFixed(1))
+      : 0;
+
+  const isFeeExceeded = isAgentListing && agentFeeUsd > maxAgentFeeAllowed;
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -158,7 +208,6 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
         const file = files[i];
         originalTotal += file.size;
 
-        // Perform fast on-device canvas compression
         const compressed = await compressImage(file, 1000, 750, 0.75);
         compressedTotal += compressed.compressedSizeBytes;
         newPhotoUrls.push(compressed.dataUrl);
@@ -180,12 +229,23 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!currentUser) return;
+
+    // Validate agent fee limits
+    if (isAgentListing && agentFeeUsd > maxAgentFeeAllowed) {
+      const limitText =
+        listingCategory === 'rental'
+          ? `10% of monthly rent ($${maxAgentFeeAllowed})`
+          : `2% of total sales price ($${maxAgentFeeAllowed.toLocaleString()})`;
+      setFormError(`Agent fee cannot exceed ${limitText}. Please adjust the fee.`);
+      return;
+    }
 
     const suburbFinal = selectedSuburb === 'Other' ? customSuburb : selectedSuburb;
 
-    // Approximate ZiG based on 1:27.5 rate
-    const rentZig = Math.round(rentUsd * 27.5);
+    const basePrice = listingCategory === 'sale' ? Number(askingPriceUsd) : Number(rentUsd);
+    const rentZig = Math.round(basePrice * 27.5);
 
     const propertyId = propertyToEdit ? propertyToEdit.id : `prop_${Date.now()}`;
 
@@ -197,14 +257,22 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
       landlordEmail: currentUser.email,
       name,
       propertyType,
+      listingCategory,
+      askingPriceUsd: listingCategory === 'sale' ? Number(askingPriceUsd) : undefined,
+      paymentType: listingCategory === 'sale' ? paymentType : undefined,
       roomsAvailable:
         propertyType === 'Room' || propertyType === 'Shared Room'
           ? Number(roomsAvailable)
           : undefined,
-      rentUsd: Number(rentUsd),
+      rentUsd: basePrice,
       rentZig,
-      rentBasis,
-      depositUsd: Number(depositUsd),
+      rentBasis: listingCategory === 'rental' ? rentBasis : undefined,
+      depositUsd: listingCategory === 'rental' ? Number(depositUsd) : 0,
+      isAgentListing,
+      agentFeeUsd: isAgentListing && agentFeeUsd > 0 ? Number(agentFeeUsd) : undefined,
+      agentFeePercentage:
+        isAgentListing && agentFeeUsd > 0 ? currentAgentFeePercentage : undefined,
+      agentName: isAgentListing ? currentUser.name || currentUser.companyName : undefined,
       province: selectedProvince,
       city: selectedCity,
       suburb: suburbFinal || 'Central',
@@ -256,8 +324,10 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     await db.notifications.add({
       id: `notif_${Date.now()}`,
       userId: currentUser.id,
-      title: isEdit ? 'Listing Updated' : 'Listing Published Offline',
-      message: `"${name}" was ${isEdit ? 'updated' : 'published and saved locally'}.`,
+      title: isEdit ? 'Listing Updated' : 'Listing Published',
+      message: `"${name}" (${listingCategory === 'sale' ? 'For Sale' : 'For Rent'}) was ${
+        isEdit ? 'updated' : 'published'
+      } successfully.`,
       type: 'property_match',
       read: false,
       timestamp: Date.now(),
@@ -273,16 +343,19 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
         {/* Header */}
         <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold">
-              {isEdit ? 'Edit Property Listing' : 'Advertise Property (Offline-First)'}
+            <h2 className="text-base font-bold flex items-center gap-2">
+              <span>{isEdit ? 'Edit Property Listing' : 'Advertise New Property Listing'}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 uppercase">
+                {listingCategory === 'sale' ? 'For Sale' : 'For Rent'}
+              </span>
             </h2>
             <p className="text-xs text-slate-300">
-              Listings are saved immediately to your device & queued for sync
+              Instant offline-first persistence • Synced to Zimbabwe cloud database
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -290,7 +363,70 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-4 text-xs">
-          {/* Property Name */}
+          {formError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          {/* 1. Choose Listing Purpose: For Rent vs For Sale (Requirement 2) */}
+          <div>
+            <label className="block font-bold text-slate-800 mb-1.5">
+              1. What type of listing are you creating? *
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setListingCategory('rental')}
+                className={`p-3 rounded-xl border text-left flex items-center gap-3 transition cursor-pointer ${
+                  listingCategory === 'rental'
+                    ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/20 text-emerald-950 font-bold'
+                    : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                }`}
+              >
+                <div
+                  className={`p-2 rounded-lg ${
+                    listingCategory === 'rental'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  <Home className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold">Rental Property</h4>
+                  <p className="text-[10px] text-slate-500">Monthly lease or tenant sublet</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setListingCategory('sale')}
+                className={`p-3 rounded-xl border text-left flex items-center gap-3 transition cursor-pointer ${
+                  listingCategory === 'sale'
+                    ? 'border-amber-600 bg-amber-50/80 ring-2 ring-amber-500/20 text-amber-950 font-bold'
+                    : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                }`}
+              >
+                <div
+                  className={`p-2 rounded-lg ${
+                    listingCategory === 'sale'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  <Tag className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold">Property for Sale</h4>
+                  <p className="text-[10px] text-slate-500">Selling house, land, or building</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Property Headline */}
           <div>
             <label className="block font-bold text-slate-800 mb-1">
               Property Headline / Title *
@@ -298,10 +434,14 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             <input
               type="text"
               required
-              placeholder="e.g. Spacious 2-Bed Cottage with 5kVA Solar & Prolific Borehole"
+              placeholder={
+                listingCategory === 'sale'
+                  ? 'e.g. Modern 4-Bed House for Sale with Title Deeds & Borehole'
+                  : 'e.g. Spacious 2-Bed Cottage with 5kVA Solar & Prolific Borehole'
+              }
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
+              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs font-medium"
             />
           </div>
 
@@ -333,119 +473,196 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             </div>
 
             <div>
-              <label className="block font-bold text-slate-800 mb-1">Availability</label>
+              <label className="block font-bold text-slate-800 mb-1">Status / Availability</label>
               <select
                 value={availability}
                 onChange={e => setAvailability(e.target.value as AvailabilityStatus)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden bg-white text-xs"
               >
-                <option value="Immediate">Immediate</option>
+                <option value="Immediate">
+                  {listingCategory === 'sale' ? 'Available Immediately' : 'Immediate'}
+                </option>
                 <option value="Next Month">Next Month</option>
                 <option value="From Date">Specific Date (Choose Calendar)</option>
-                <option value="Occupied">Occupied / Taken (Active 24h)</option>
+                <option value="Occupied">
+                  {listingCategory === 'sale' ? 'Mark Sold / Taken (Active 24h)' : 'Occupied / Taken (Active 24h)'}
+                </option>
               </select>
             </div>
           </div>
 
-          {/* If Room is selected, specify number of rooms available */}
-          {(propertyType === 'Room' || propertyType === 'Shared Room') && (
-            <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl space-y-1">
-              <label className="block font-bold text-sky-950 text-xs">
-                Number of Rooms Available *
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                required
-                value={roomsAvailable}
-                onChange={e => setRoomsAvailable(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-white border border-sky-300 rounded-lg text-xs font-bold text-slate-900"
-              />
-              <p className="text-[10px] text-sky-700">
-                Specify the exact quantity of rooms open for accommodation in this building.
-              </p>
+          {/* Pricing Section (Requirement 2) */}
+          {listingCategory === 'rental' ? (
+            /* Rental Pricing */
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200">
+              <div>
+                <label className="block font-bold text-emerald-950 mb-1">
+                  Monthly Rent (USD $) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 font-bold text-slate-500">$</span>
+                  <input
+                    type="number"
+                    required
+                    min={10}
+                    value={rentUsd}
+                    onChange={e => setRentUsd(Number(e.target.value))}
+                    className="w-full pl-7 pr-3 py-1.5 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900"
+                  />
+                </div>
+                <p className="text-[10px] text-emerald-700 mt-1 font-medium">
+                  ~ZiG {Math.round(rentUsd * 27.5).toLocaleString()}
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-emerald-950 mb-1">
+                  Rent Pricing Basis
+                </label>
+                <select
+                  value={rentBasis}
+                  onChange={e => setRentBasis(e.target.value as RentBasis)}
+                  className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-semibold text-slate-800"
+                >
+                  <option value="per month">per month</option>
+                  <option value="per room">per room</option>
+                  <option value="per house">per house</option>
+                  <option value="per space">per space</option>
+                  <option value="per bed">per bed</option>
+                </select>
+                <p className="text-[10px] text-emerald-700 mt-1 font-medium">
+                  Billed {rentBasis}
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-emerald-950 mb-1">
+                  Security Deposit (USD $) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 font-bold text-slate-500">$</span>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={depositUsd}
+                    onChange={e => setDepositUsd(Number(e.target.value))}
+                    className="w-full pl-7 pr-3 py-1.5 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">Refundable deposit</p>
+              </div>
+            </div>
+          ) : (
+            /* Properties for Sale: Replaced Monthly Rent & Rent Basis with Asking Price & Payment Type */
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50/70 p-3.5 rounded-xl border border-amber-200">
+              <div>
+                <label className="block font-bold text-amber-950 mb-1">
+                  Asking Price (USD $) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 font-bold text-slate-500">$</span>
+                  <input
+                    type="number"
+                    required
+                    min={100}
+                    value={askingPriceUsd}
+                    onChange={e => setAskingPriceUsd(Number(e.target.value))}
+                    className="w-full pl-7 pr-3 py-2 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-bold text-slate-900 text-xs"
+                    placeholder="e.g. 55000"
+                  />
+                </div>
+                <p className="text-[10px] text-amber-800 mt-1 font-medium">
+                  ~ZiG {Math.round(askingPriceUsd * 27.5).toLocaleString()}
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-amber-950 mb-1">
+                  Payment Type *
+                </label>
+                <select
+                  value={paymentType}
+                  onChange={e => setPaymentType(e.target.value as SalePaymentType)}
+                  className="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-slate-800"
+                >
+                  <option value="Once off payment">Once off payment</option>
+                  <option value="Installments">Installments</option>
+                  <option value="Negotiable">Negotiable</option>
+                </select>
+                <p className="text-[10px] text-amber-800 mt-1 font-medium">
+                  Terms accepted by seller: {paymentType}
+                </p>
+              </div>
             </div>
           )}
 
-          {/* If Specific Date is selected, calendar picker */}
-          {availability === 'From Date' && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
-              <label className="block font-bold text-emerald-950 text-xs">
-                Select Available From Date *
-              </label>
-              <input
-                type="date"
-                required
-                value={availableDate}
-                onChange={e => setAvailableDate(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-semibold text-slate-900"
-              />
-              <p className="text-[10px] text-emerald-700">
-                The exact calendar date when this listing becomes ready for occupation.
-              </p>
-            </div>
-          )}
-
-          {/* Pricing with Rent Basis Selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200">
-            <div>
-              <label className="block font-bold text-emerald-950 mb-1">
-                Monthly Rent (USD $) *
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-2 font-bold text-slate-500">$</span>
+          {/* Agent Fee Section (Requirement 3) */}
+          <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
-                  type="number"
-                  required
-                  min={10}
-                  value={rentUsd}
-                  onChange={e => setRentUsd(Number(e.target.value))}
-                  className="w-full pl-7 pr-3 py-1.5 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900"
+                  type="checkbox"
+                  checked={isAgentListing}
+                  onChange={e => setIsAgentListing(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
                 />
-              </div>
-              <p className="text-[10px] text-emerald-700 mt-1 font-medium">
-                ~ZiG {Math.round(rentUsd * 27.5).toLocaleString()}
-              </p>
+                <span className="font-bold text-xs text-indigo-950 flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>Enlist as Real Estate Agent / Include Agent Fee</span>
+                </span>
+              </label>
+              {isUserAgent && (
+                <span className="text-[10px] font-bold bg-indigo-200 text-indigo-900 px-2 py-0.5 rounded-full">
+                  Agent Account
+                </span>
+              )}
             </div>
 
-            <div>
-              <label className="block font-bold text-emerald-950 mb-1">
-                Rent Pricing Basis
-              </label>
-              <select
-                value={rentBasis}
-                onChange={e => setRentBasis(e.target.value as RentBasis)}
-                className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-semibold text-slate-800"
-              >
-                <option value="per month">per month</option>
-                <option value="per room">per room</option>
-                <option value="per house">per house</option>
-                <option value="per space">per space</option>
-                <option value="per bed">per bed</option>
-              </select>
-              <p className="text-[10px] text-emerald-700 mt-1 font-medium">
-                Billed {rentBasis}
-              </p>
-            </div>
+            {isAgentListing && (
+              <div className="pt-1 space-y-1.5">
+                <label className="block font-bold text-indigo-950 text-xs">
+                  Agent Fee (USD $)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 font-bold text-slate-500">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={maxAgentFeeAllowed}
+                    value={agentFeeUsd}
+                    onChange={e => setAgentFeeUsd(Number(e.target.value))}
+                    className={`w-full pl-7 pr-3 py-1.5 bg-white border rounded-lg focus:ring-2 font-bold text-xs text-slate-900 ${
+                      isFeeExceeded
+                        ? 'border-rose-500 focus:ring-rose-500 text-rose-900'
+                        : 'border-indigo-300 focus:ring-indigo-500'
+                    }`}
+                    placeholder={`e.g. ${maxAgentFeeAllowed}`}
+                  />
+                </div>
 
-            <div>
-              <label className="block font-bold text-emerald-950 mb-1">
-                Security Deposit (USD $) *
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-2 font-bold text-slate-500">$</span>
-                <input
-                  type="number"
-                  required
-                  min={0}
-                  value={depositUsd}
-                  onChange={e => setDepositUsd(Number(e.target.value))}
-                  className="w-full pl-7 pr-3 py-1.5 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900"
-                />
+                <div className="flex items-center justify-between text-[11px]">
+                  <span
+                    className={`font-semibold ${
+                      isFeeExceeded ? 'text-rose-600 font-bold' : 'text-indigo-800'
+                    }`}
+                  >
+                    {listingCategory === 'rental'
+                      ? `Max allowed fee is 10% of monthly rent ($${maxAgentFeeAllowed})`
+                      : `Max allowed fee is 2% of total sales price ($${maxAgentFeeAllowed.toLocaleString()})`}
+                  </span>
+                  <span className="text-slate-500">
+                    Fee: {currentAgentFeePercentage}%
+                  </span>
+                </div>
+                {isFeeExceeded && (
+                  <p className="text-[11px] text-rose-600 font-bold">
+                    ⚠️ Fee of ${agentFeeUsd} exceeds maximum permissible rate of $
+                    {maxAgentFeeAllowed}.
+                  </p>
+                )}
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">Refundable deposit</p>
-            </div>
+            )}
           </div>
 
           {/* Zimbabwe Location Database Pickers */}
@@ -461,7 +678,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                 <select
                   value={selectedProvince}
                   onChange={e => handleProvinceChange(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-slate-300 rounded-lg bg-white"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
                 >
                   {ZIMBABWE_PROVINCES.map(p => (
                     <option key={p} value={p}>
@@ -478,7 +695,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                 <select
                   value={selectedCity}
                   onChange={e => handleCityChange(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-slate-300 rounded-lg bg-white"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
                 >
                   {cities.map(c => (
                     <option key={c} value={c}>
@@ -490,12 +707,12 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Suburb / Growth Point
+                  Suburb / Area
                 </label>
                 <select
                   value={selectedSuburb}
                   onChange={e => setSelectedSuburb(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-slate-300 rounded-lg bg-white"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
                 >
                   {suburbs.map(s => (
                     <option key={s} value={s}>
@@ -510,43 +727,44 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             {selectedSuburb === 'Other' && (
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Enter Suburb / Area Name
+                  Specify Suburb Name *
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Newlands or Warren Park"
+                  required
+                  placeholder="e.g. Madokero, Helensvale"
                   value={customSuburb}
                   onChange={e => setCustomSuburb(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg bg-white"
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
                 />
               </div>
             )}
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Street Address or Landmark
+                Street / Physical Address
               </label>
               <input
                 type="text"
-                placeholder="e.g. 14 Cambridge Road, near Avondale Shopping Centre"
+                placeholder="e.g. 14 Bath Road, Avondale"
                 value={address}
                 onChange={e => setAddress(e.target.value)}
-                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg bg-white"
+                className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
               />
             </div>
           </div>
 
-          {/* Bedrooms / Bathrooms */}
+          {/* Rooms and Bathrooms */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-bold text-slate-800 mb-1">Bedrooms</label>
               <input
                 type="number"
-                min={1}
+                min={0}
                 max={20}
                 value={bedrooms}
                 onChange={e => setBedrooms(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
               />
             </div>
             <div>
@@ -554,153 +772,86 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               <input
                 type="number"
                 min={1}
-                max={10}
+                max={15}
                 value={bathrooms}
                 onChange={e => setBathrooms(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
               />
             </div>
           </div>
 
-          {/* Photo Uploader with Aggressive Canvas Compression */}
+          {/* Amenities Multi-Select */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block font-bold text-slate-800">
-                Property Photos (Client Compressed for Low Storage)
-              </label>
-              <span className="text-[11px] text-slate-500">
-                {photos.length} uploaded
-              </span>
-            </div>
-
-            <div className="border-2 border-dashed border-slate-300 rounded-2xl p-4 text-center hover:bg-slate-50 transition relative">
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileChange}
-                disabled={compressing}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              />
-              <div className="flex flex-col items-center justify-center space-y-1 text-slate-500">
-                <Upload className="w-6 h-6 text-emerald-600" />
-                <span className="text-xs font-semibold text-slate-700">
-                  {compressing
-                    ? 'Compressing photos on-device...'
-                    : 'Tap or drop photos to upload'}
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  Compressed automatically to ~70KB WebP for fast offline storage
-                </span>
-              </div>
-            </div>
-
-            {compressStats && (
-              <p className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md">
-                {compressStats}
-              </p>
-            )}
-
-            {photos.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto py-1">
-                {photos.map((src, idx) => (
-                  <div key={idx} className="relative w-20 h-16 rounded-lg overflow-hidden shrink-0 border border-slate-200 group">
-                    <img src={src} alt="" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setPhotos(photos.filter((_, i) => i !== idx))}
-                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-80 hover:opacity-100 transition"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Amenities Checklist */}
-          <div>
-            <label className="block font-bold text-slate-800 mb-2">
-              Select Amenities & Infrastructure
+            <label className="block font-bold text-slate-800">
+              Verified Amenities & Features ({amenities.length} selected)
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {commonAmenitiesList.map(a => {
-                const checked = amenities.includes(a);
+                const isSelected = amenities.includes(a);
                 return (
                   <button
                     key={a}
                     type="button"
                     onClick={() => toggleAmenity(a)}
-                    className={`flex items-center gap-1.5 p-2 rounded-xl text-left border transition ${
-                      checked
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-semibold'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    className={`py-1.5 px-2.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${
+                      isSelected
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300 bg-white'
                     }`}
                   >
-                    <CheckCircle2
-                      className={`w-3.5 h-3.5 ${
-                        checked ? 'text-emerald-600' : 'text-slate-300'
-                      }`}
-                    />
-                    <span className="text-[11px] truncate">{a}</span>
+                    <span className="truncate">{a}</span>
+                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
                   </button>
                 );
               })}
             </div>
+          </div>
 
-            {/* Custom Amenities physically entered by landlord */}
-            <div className="mt-2.5 flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Type custom amenity (e.g. Swimming Pool, 5kVA Solar Inverter, Carport)..."
-                value={customAmenityInput}
-                onChange={e => setCustomAmenityInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (customAmenityInput.trim() && !amenities.includes(customAmenityInput.trim())) {
-                      setAmenities([...amenities, customAmenityInput.trim()]);
-                      setCustomAmenityInput('');
-                    }
-                  }
-                }}
-                className="flex-1 px-3 py-1.5 border border-slate-300 rounded-xl text-xs outline-hidden focus:ring-2 focus:ring-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (customAmenityInput.trim() && !amenities.includes(customAmenityInput.trim())) {
-                    setAmenities([...amenities, customAmenityInput.trim()]);
-                    setCustomAmenityInput('');
-                  }
-                }}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
-              >
-                + Add Amenity
-              </button>
+          {/* Photos Upload with On-device compression */}
+          <div className="space-y-2">
+            <label className="block font-bold text-slate-800">
+              Property Photos ({photos.length})
+            </label>
+            <div className="flex items-center gap-3">
+              <label className="px-4 py-2 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-300 font-bold hover:bg-emerald-100 transition cursor-pointer flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                <span>Upload Photos</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
+              {compressing && (
+                <span className="text-xs text-emerald-700 animate-pulse font-semibold">
+                  Compressing for fast offline load...
+                </span>
+              )}
             </div>
 
-            {/* Render any added custom amenities */}
-            {amenities.filter(a => !commonAmenitiesList.includes(a)).length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {amenities
-                  .filter(a => !commonAmenitiesList.includes(a))
-                  .map(customA => (
-                    <span
-                      key={customA}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-semibold rounded-lg"
+            {compressStats && (
+              <p className="text-[10px] text-emerald-700 font-medium">{compressStats}</p>
+            )}
+
+            {photos.length > 0 && (
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                {photos.map((p, idx) => (
+                  <div
+                    key={idx}
+                    className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group"
+                  >
+                    <img src={p} alt="Listing" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setPhotos(photos.filter((_, i) => i !== idx))}
+                      className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
                     >
-                      <span>✓ {customA}</span>
-                      <button
-                        type="button"
-                        onClick={() => toggleAmenity(customA)}
-                        className="text-emerald-700 hover:text-emerald-950 font-bold ml-1"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -719,21 +870,36 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             />
           </div>
 
+          {/* Sales Transaction Disclaimer Note (Requirement 2 Mandatory Disclaimer) */}
+          {listingCategory === 'sale' && (
+            <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl text-amber-950 space-y-1.5 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                <span className="font-extrabold text-xs">
+                  Important Sales & Legal Paperwork Disclaimer:
+                </span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-amber-900 font-medium">
+                On selling properties, verify all paperwork and proof of payments and make sure you make Agreements of Sale documents before any transactions is finalised. This application does not guarantee any Agreement of Sale or Proof of Payment whatsoever.
+              </p>
+            </div>
+          )}
+
           {/* Submit Actions */}
-          <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 font-semibold"
+              className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 font-semibold cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={compressing || !name}
-              className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold transition disabled:opacity-50"
+              disabled={compressing || !name || isFeeExceeded}
+              className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold transition disabled:opacity-50 cursor-pointer shadow-xs"
             >
-              Publish Property Listing
+              {listingCategory === 'sale' ? 'Publish Sale Listing' : 'Publish Rental Listing'}
             </button>
           </div>
         </form>
