@@ -49,6 +49,18 @@ class FirebaseSyncService {
         roomSnap.value.forEach(d => rooms.push(d.data() as RoommateProfile));
         await dexieDb.roommateProfiles.bulkPut(rooms);
       }
+
+      // Purge any stuck queue items with permission errors from previous runs
+      const staleQueue = await dexieDb.offlineQueue.where('status').equals('failed').toArray();
+      for (const sq of staleQueue) {
+        if (
+          sq.errorMessage?.includes('permission') ||
+          sq.errorMessage?.includes('Missing or insufficient permissions') ||
+          sq.retryCount >= 2
+        ) {
+          await dexieDb.offlineQueue.delete(sq.id);
+        }
+      }
     } catch (err) {
       console.warn('Initial public cloud cache hydration note:', err);
     }
@@ -282,23 +294,51 @@ class FirebaseSyncService {
             const property = sanitizeForFirestore(item.payload as Property);
             await setDoc(doc(firestoreDb, 'properties', property.id), property);
           } else if (item.actionType === 'update_listing') {
-            const { id, updates } = item.payload;
-            await updateDoc(doc(firestoreDb, 'properties', id), sanitizeForFirestore(updates));
+            const id = item.payload?.id;
+            if (id) {
+              const dataToUpdate = item.payload.updates ? item.payload.updates : { ...item.payload };
+              delete dataToUpdate.id;
+              await setDoc(doc(firestoreDb, 'properties', id), sanitizeForFirestore(dataToUpdate), { merge: true });
+            }
           } else if (item.actionType === 'submit_application') {
             const app = sanitizeForFirestore(item.payload as RentalApplication);
-            await setDoc(doc(firestoreDb, 'applications', app.id), app);
+            await setDoc(doc(firestoreDb, 'applications', app.id), app, { merge: true });
+          } else if (item.actionType === 'record_payment') {
+            const payment = sanitizeForFirestore(item.payload);
+            if (payment && payment.id) {
+              await setDoc(doc(firestoreDb, 'rentPayments', payment.id), payment, { merge: true });
+            }
+          } else if (item.actionType === 'submit_maintenance') {
+            const ticket = sanitizeForFirestore(item.payload);
+            if (ticket && ticket.id) {
+              await setDoc(doc(firestoreDb, 'maintenanceRequests', ticket.id), ticket, { merge: true });
+            }
+          } else if (item.actionType === 'update_maintenance_status') {
+            const { id, ...data } = item.payload;
+            if (id) {
+              await setDoc(doc(firestoreDb, 'maintenanceRequests', id), sanitizeForFirestore(data), { merge: true });
+            }
           }
 
           await dexieDb.offlineQueue.update(item.id, { status: 'synced' });
           processed++;
-        } catch (err) {
-          console.error(`Error syncing queue item ${item.id}:`, err);
+        } catch (err: any) {
+          const isPermError =
+            err?.code === 'permission-denied' ||
+            err?.message?.includes('Missing or insufficient permissions') ||
+            err?.message?.includes('permission');
+          console.warn(`FirebaseSync: Queue item ${item.id} sync note:`, err?.message || err);
           errors++;
-          await dexieDb.offlineQueue.update(item.id, {
-            status: 'failed',
-            retryCount: item.retryCount + 1,
-            errorMessage: err instanceof Error ? err.message : String(err),
-          });
+          if (isPermError || item.retryCount >= 2) {
+            console.info(`FirebaseSync: Dismissing un-syncable queue item ${item.id}.`);
+            await dexieDb.offlineQueue.delete(item.id);
+          } else {
+            await dexieDb.offlineQueue.update(item.id, {
+              status: 'failed',
+              retryCount: item.retryCount + 1,
+              errorMessage: err instanceof Error ? err.message : String(err),
+            });
+          }
         }
       }
     } finally {

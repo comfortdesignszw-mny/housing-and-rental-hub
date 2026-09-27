@@ -216,7 +216,7 @@ export interface RentalApplication {
   applicantId: string;
   applicantName: string;
   applicantPhone: string;
-  applicantEmail: string;
+  applicantEmail?: string;
   proposedMoveInDate: string;
   occupantsCount: number;
   employmentStatus: string;

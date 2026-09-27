@@ -46,6 +46,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
   const isEdit = !!propertyToEdit;
 
+  // Let the user choose after clicking "Add Property Listings" whether they are creating a listing for sale or a rental property
+  const [categoryChosen, setCategoryChosen] = useState<boolean>(isEdit);
+
   // Category: Rental or For Sale (Requirement 2)
   const [listingCategory, setListingCategory] = useState<ListingCategory>(
     propertyToEdit?.listingCategory || 'rental'
@@ -311,7 +314,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
         await offlineSyncService.enqueueAction('update_listing', cleanPropertyData);
       }
     } else {
-      await db.properties.add(cleanPropertyData);
+      await db.properties.put(cleanPropertyData);
       try {
         await setDoc(doc(firestoreDb, 'properties', propertyId), cleanPropertyData);
       } catch (err) {
@@ -336,6 +339,87 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     onCreated(propertyData);
     onClose();
   };
+
+  // Step 0: User chooses whether they are creating a listing for sale or a rental property (Requirement 2)
+  if (!categoryChosen) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 sm:p-4 backdrop-blur-xs overflow-y-auto">
+        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-150 my-auto border border-slate-200">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                New Property Listing
+              </span>
+              <h2 className="text-lg font-black text-slate-900 mt-1">
+                Choose Listing Type to Advertise
+              </h2>
+              <p className="text-xs text-slate-500">
+                Select whether you are listing a rental property or selling a property
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Card 1: Rental Property */}
+            <button
+              type="button"
+              onClick={() => {
+                setListingCategory('rental');
+                setCategoryChosen(true);
+              }}
+              className="p-5 rounded-2xl border-2 border-emerald-500/30 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-600 transition flex flex-col items-center text-center space-y-3 cursor-pointer group shadow-2xs text-left"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+                <Home className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-800">
+                  Rental Property
+                </h3>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  List houses, flats, cottages, rooms, or student boarding with monthly rent & deposit
+                </p>
+              </div>
+              <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl">
+                Create Rental Listing →
+              </span>
+            </button>
+
+            {/* Card 2: Property for Sale */}
+            <button
+              type="button"
+              onClick={() => {
+                setListingCategory('sale');
+                setCategoryChosen(true);
+              }}
+              className="p-5 rounded-2xl border-2 border-amber-500/30 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-600 transition flex flex-col items-center text-center space-y-3 cursor-pointer group shadow-2xs text-left"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-amber-600 text-white flex items-center justify-center group-hover:scale-105 transition shadow-sm">
+                <Tag className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-sm text-slate-900 group-hover:text-amber-800">
+                  Property for Sale
+                </h3>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  List houses, stands, plots, land, or commercial properties with asking price & payment terms
+                </p>
+              </div>
+              <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-xl">
+                Create Sale Listing →
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
@@ -510,9 +594,6 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                     className="w-full pl-7 pr-3 py-1.5 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900"
                   />
                 </div>
-                <p className="text-[10px] text-emerald-700 mt-1 font-medium">
-                  ~ZiG {Math.round(rentUsd * 27.5).toLocaleString()}
-                </p>
               </div>
 
               <div>
@@ -572,9 +653,6 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                     placeholder="e.g. 55000"
                   />
                 </div>
-                <p className="text-[10px] text-amber-800 mt-1 font-medium">
-                  ~ZiG {Math.round(askingPriceUsd * 27.5).toLocaleString()}
-                </p>
               </div>
 
               <div>

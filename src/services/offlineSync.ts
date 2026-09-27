@@ -67,10 +67,12 @@ export class OfflineSyncService {
 
           // 3. Update Listing
           else if (item.actionType === 'update_listing') {
-            const { id, ...data } = item.payload;
+            const id = item.payload?.id;
             if (id) {
-              const cleanData = sanitizeForFirestore(data);
-              await updateDoc(doc(firestoreDb, 'properties', id), cleanData);
+              const dataToUpdate = item.payload.updates ? item.payload.updates : { ...item.payload };
+              delete dataToUpdate.id;
+              const cleanData = sanitizeForFirestore(dataToUpdate);
+              await setDoc(doc(firestoreDb, 'properties', id), cleanData, { merge: true });
             }
           }
 
@@ -79,7 +81,31 @@ export class OfflineSyncService {
             const prop = item.payload as Property;
             if (prop && prop.id) {
               const cleanProp = sanitizeForFirestore(prop);
-              await setDoc(doc(firestoreDb, 'properties', prop.id), cleanProp);
+              await setDoc(doc(firestoreDb, 'properties', prop.id), cleanProp, { merge: true });
+            }
+          }
+
+          // 5. Rent Payment
+          else if (item.actionType === 'record_payment') {
+            const payment = sanitizeForFirestore(item.payload);
+            if (payment && payment.id) {
+              await setDoc(doc(firestoreDb, 'rentPayments', payment.id), payment, { merge: true });
+            }
+          }
+
+          // 6. Submit Maintenance
+          else if (item.actionType === 'submit_maintenance') {
+            const ticket = sanitizeForFirestore(item.payload);
+            if (ticket && ticket.id) {
+              await setDoc(doc(firestoreDb, 'maintenanceRequests', ticket.id), ticket, { merge: true });
+            }
+          }
+
+          // 7. Update Maintenance Status
+          else if (item.actionType === 'update_maintenance_status') {
+            const { id, ...data } = item.payload;
+            if (id) {
+              await setDoc(doc(firestoreDb, 'maintenanceRequests', id), sanitizeForFirestore(data), { merge: true });
             }
           }
 
@@ -87,13 +113,23 @@ export class OfflineSyncService {
           await db.offlineQueue.update(item.id, { status: 'synced' });
           processed++;
         } catch (err: any) {
-          console.error('Failed to sync queue item:', item.id, err);
+          const isPermError =
+            err?.code === 'permission-denied' ||
+            err?.message?.includes('Missing or insufficient permissions') ||
+            err?.message?.includes('permission');
+          console.warn(`OfflineSync: Queue item ${item.id} sync note:`, err?.message || err);
           errors++;
-          await db.offlineQueue.update(item.id, {
-            status: 'failed',
-            retryCount: item.retryCount + 1,
-            errorMessage: err?.message || 'Sync error',
-          });
+          // If unauthorized, permission denied, or retried too many times, dismiss it from the queue cleanly
+          if (isPermError || item.retryCount >= 2) {
+            console.info(`OfflineSync: Dismissing un-syncable queue item ${item.id}.`);
+            await db.offlineQueue.delete(item.id);
+          } else {
+            await db.offlineQueue.update(item.id, {
+              status: 'failed',
+              retryCount: item.retryCount + 1,
+              errorMessage: err?.message || 'Sync error',
+            });
+          }
         }
       }
     } finally {
@@ -101,6 +137,26 @@ export class OfflineSyncService {
     }
 
     return { processed, errors };
+  }
+
+  /**
+   * Purge stuck failed items caused by old permission roadblocks
+   */
+  async purgeStalePermissionQueue(): Promise<void> {
+    try {
+      const failed = await db.offlineQueue.where('status').equals('failed').toArray();
+      for (const item of failed) {
+        if (
+          item.errorMessage?.includes('permission') ||
+          item.errorMessage?.includes('Missing or insufficient permissions') ||
+          item.retryCount >= 2
+        ) {
+          await db.offlineQueue.delete(item.id);
+        }
+      }
+    } catch (e) {
+      console.warn('Queue purge note:', e);
+    }
   }
 
   /**

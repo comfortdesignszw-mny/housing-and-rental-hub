@@ -18,9 +18,14 @@ export const PropertyCompareModal: React.FC<PropertyCompareModalProps> = ({
   if (properties.length === 0) return null;
 
   const compareFeatures = [
-    { label: 'Monthly Rent (USD)', getVal: (p: Property) => `$${p.rentUsd}/mo` },
-    { label: 'Estimated ZiG', getVal: (p: Property) => p.rentZig ? `ZiG ${p.rentZig.toLocaleString()}` : '-' },
-    { label: 'Security Deposit', getVal: (p: Property) => `$${p.depositUsd}` },
+    {
+      label: 'Price (USD)',
+      getVal: (p: Property) =>
+        p.listingCategory === 'sale'
+          ? `$${(p.askingPriceUsd || p.rentUsd).toLocaleString()} (${p.paymentType || 'Once off'})`
+          : `$${p.rentUsd}${p.rentBasis ? ` ${p.rentBasis}` : '/mo'}`,
+    },
+    { label: 'Security Deposit', getVal: (p: Property) => p.listingCategory === 'sale' ? 'N/A (Sale)' : `$${p.depositUsd}` },
     { label: 'Location', getVal: (p: Property) => `${p.suburb}, ${p.city}` },
     { label: 'Property Type', getVal: (p: Property) => p.propertyType },
     { label: 'Bedrooms', getVal: (p: Property) => `${p.bedrooms} Beds` },

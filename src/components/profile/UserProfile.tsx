@@ -177,6 +177,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => 
     tenant: 'Search listings, compare properties, apply for rentals, find roommates, and chat with landlords.',
     landlord: 'Create listings, manage units, issue rent receipts, track lease expirations, and oversee repairs.',
     property_manager: 'Manage multiple portfolios across Harare & Bulawayo with bulk reporting.',
+    agent: 'Enlist rental and selling properties, represent landlords & sellers, and include agent commission fees.',
     admin: 'Platform moderation, user role governance (RBAC), verification badge approval, and system settings.',
     guest: 'Browse app listings and properties with read-only permissions; sign in to apply or list.',
   };

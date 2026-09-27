@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <p className="text-[10px] text-slate-500 hidden sm:block -mt-0.5">
-              Real World Rentals • Cloud Persistence & Offline Cache
+              Real World Rentals, Property Sales. Verified Properties
             </p>
           </div>
         </div>
@@ -82,8 +82,8 @@ export const Header: React.FC<HeaderProps> = ({
           {/* PWA Install Button */}
           <PWAInstallButton />
 
-          {/* Quick Create Listing button for Landlords & Admins */}
-          {(role === 'landlord' || role === 'property_manager' || role === 'admin') && (
+          {/* Quick Create Listing button for Landlords, Property Managers, Agents & Admins */}
+          {(role === 'landlord' || role === 'property_manager' || role === 'agent' || role === 'admin') && (
             <button
               onClick={onOpenCreateListing}
               className="hidden md:flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs transition"

@@ -236,7 +236,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                     ${(property.askingPriceUsd || property.rentUsd).toLocaleString()}
                   </span>
                   <span className="text-[11px] font-medium text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200">
-                    {property.paymentType || 'Once off payment'}
+                    {property.paymentType === 'Installments' ? 'Installments' : 'Once off purchase'}
                   </span>
                 </>
               ) : (
@@ -250,12 +250,14 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                 </>
               )}
             </div>
-            {property.rentZig && (
-              <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50">
-                ~ZiG {property.rentZig.toLocaleString()}
-              </span>
-            )}
           </div>
+
+          {/* Installment note for sale properties (Requirement 1) */}
+          {property.listingCategory === 'sale' && property.paymentType === 'Installments' && (
+            <p className="text-[10px] text-amber-900 font-medium leading-tight mb-1 bg-amber-50 p-1.5 rounded-lg border border-amber-200/80">
+              Further installments calculations will be done on successful engagement.
+            </p>
+          )}
 
           {/* Agent Fee Note if available */}
           {property.agentFeeUsd ? (

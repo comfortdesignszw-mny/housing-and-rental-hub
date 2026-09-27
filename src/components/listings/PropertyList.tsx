@@ -76,84 +76,89 @@ export const PropertyList: React.FC<PropertyListProps> = ({
     [currentUser?.id]
   ) || [];
 
-  // Filter properties in memory (fast and offline)
+  // Filter properties in memory (fast and offline) with newest published listings at the top
   const filteredProperties = useMemo(() => {
-    return allProperties.filter(property => {
-      // Disappear from active listings if marked taken/occupied for >= 24 hours
-      if (property.availability === 'Occupied') {
-        const occupiedTimestamp = property.occupiedAt || property.updatedAt || property.createdAt;
-        const elapsed = Date.now() - occupiedTimestamp;
-        if (elapsed >= 24 * 60 * 60 * 1000) {
-          return false; // Disappears from active listings after 24h
+    return allProperties
+      .filter(property => {
+        // Disappear from active listings if marked taken/occupied for >= 24 hours
+        if (property.availability === 'Occupied') {
+          const occupiedTimestamp = property.occupiedAt || property.updatedAt || property.createdAt;
+          const elapsed = Date.now() - occupiedTimestamp;
+          if (elapsed >= 24 * 60 * 60 * 1000) {
+            return false; // Disappears from active listings after 24h
+          }
         }
-      }
 
-      // Filter by Listing Category (All vs Rental vs Sale)
-      if (categoryFilter !== 'all') {
-        const cat = property.listingCategory || 'rental';
-        if (cat !== categoryFilter) return false;
-      }
+        // Filter by Listing Category (All vs Rental vs Sale)
+        if (categoryFilter !== 'all') {
+          const cat = property.listingCategory || 'rental';
+          if (cat !== categoryFilter) return false;
+        }
 
-      if (onlySaved && !savedListingIds.includes(property.id)) {
-        return false;
-      }
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = property.name.toLowerCase().includes(q);
-        const matchesSuburb = property.suburb.toLowerCase().includes(q);
-        const matchesCity = property.city.toLowerCase().includes(q);
-        const matchesType = property.propertyType.toLowerCase().includes(q);
-        const matchesDesc = property.description.toLowerCase().includes(q);
-        if (!matchesName && !matchesSuburb && !matchesCity && !matchesType && !matchesDesc) {
+        if (onlySaved && !savedListingIds.includes(property.id)) {
           return false;
         }
-      }
 
-      if (selectedCity !== 'All' && property.city.toLowerCase() !== selectedCity.toLowerCase()) {
-        return false;
-      }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchesName = property.name?.toLowerCase().includes(q);
+          const matchesSuburb = property.suburb?.toLowerCase().includes(q);
+          const matchesCity = property.city?.toLowerCase().includes(q);
+          const matchesType = property.propertyType?.toLowerCase().includes(q);
+          const matchesDesc = property.description?.toLowerCase().includes(q);
+          if (!matchesName && !matchesSuburb && !matchesCity && !matchesType && !matchesDesc) {
+            return false;
+          }
+        }
 
-      if (selectedProvince !== 'All' && property.province.toLowerCase() !== selectedProvince.toLowerCase()) {
-        return false;
-      }
+        if (selectedCity !== 'All' && property.city?.toLowerCase() !== selectedCity.toLowerCase()) {
+          return false;
+        }
 
-      if (selectedType !== 'All' && property.propertyType !== selectedType) {
-        return false;
-      }
+        if (selectedProvince !== 'All' && property.province && property.province.toLowerCase() !== selectedProvince.toLowerCase()) {
+          return false;
+        }
 
-      if (property.rentUsd > maxRent) {
-        return false;
-      }
+        if (selectedType !== 'All' && property.propertyType !== selectedType) {
+          return false;
+        }
 
-      if (minBeds > 0 && property.bedrooms < minBeds) {
-        return false;
-      }
+        // Only apply monthly maxRent filter to rental listings, not to properties for sale!
+        if ((!property.listingCategory || property.listingCategory === 'rental') && property.rentUsd > maxRent) {
+          return false;
+        }
 
-      if (onlySolar && !property.amenities.some(a => a.toLowerCase().includes('solar'))) {
-        return false;
-      }
+        if (minBeds > 0 && property.bedrooms < minBeds) {
+          return false;
+        }
 
-      if (onlyBorehole && !property.amenities.some(a => a.toLowerCase().includes('borehole'))) {
-        return false;
-      }
+        if (onlySolar && !property.amenities.some(a => a.toLowerCase().includes('solar'))) {
+          return false;
+        }
 
-      if (onlyWifi && !property.amenities.some(a => a.toLowerCase().includes('wifi'))) {
-        return false;
-      }
+        if (onlyBorehole && !property.amenities.some(a => a.toLowerCase().includes('borehole'))) {
+          return false;
+        }
 
-      if (onlyFurnished && !property.amenities.some(a => a.toLowerCase().includes('furnished'))) {
-        return false;
-      }
+        if (onlyWifi && !property.amenities.some(a => a.toLowerCase().includes('wifi'))) {
+          return false;
+        }
 
-      if (onlyPetFriendly && !property.amenities.some(a => a.toLowerCase().includes('pet'))) {
-        return false;
-      }
+        if (onlyFurnished && !property.amenities.some(a => a.toLowerCase().includes('furnished'))) {
+          return false;
+        }
 
-      return true;
-    });
+        if (onlyPetFriendly && !property.amenities.some(a => a.toLowerCase().includes('pet'))) {
+          return false;
+        }
+
+        return true;
+      })
+      // Newly published listings by Property Managers, Landlords, and Agents appear immediately at top
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [
     allProperties,
+    categoryFilter,
     savedListingIds,
     onlySaved,
     searchQuery,
@@ -241,6 +246,64 @@ export const PropertyList: React.FC<PropertyListProps> = ({
 
       {/* Search & Action Bar */}
       <div className="space-y-3">
+        {/* Listing Category Selector: All vs Rentals vs Properties for Sale (Requirement 2) */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-2xl w-full sm:w-auto self-start">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('all')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              categoryFilter === 'all'
+                ? 'bg-white text-slate-900 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span>All Listings</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-semibold">
+              {allProperties.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('rental')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              categoryFilter === 'rental'
+                ? 'bg-emerald-700 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Home className="w-3.5 h-3.5" />
+            <span>Rentals</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                categoryFilter === 'rental' ? 'bg-emerald-800 text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {allProperties.filter(p => !p.listingCategory || p.listingCategory === 'rental').length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('sale')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              categoryFilter === 'sale'
+                ? 'bg-amber-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5" />
+            <span>Properties for Sale</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                categoryFilter === 'sale' ? 'bg-amber-700 text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {allProperties.filter(p => p.listingCategory === 'sale').length}
+            </span>
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           {/* Search Input */}
           <div className="relative flex-1">
@@ -280,8 +343,8 @@ export const PropertyList: React.FC<PropertyListProps> = ({
             )}
           </button>
 
-          {/* Add Listing Button for Landlords */}
-          {(role === 'landlord' || role === 'property_manager') && (
+          {/* Add Listing Button for Landlords, Property Managers, Agents & Admins */}
+          {(role === 'landlord' || role === 'property_manager' || role === 'agent' || role === 'admin') && (
             <button
               onClick={onOpenCreateListing}
               className="flex md:hidden items-center justify-center p-2 rounded-xl bg-emerald-700 text-white shadow-2xs hover:bg-emerald-800 transition"

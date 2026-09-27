@@ -21,6 +21,11 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
   onSuccess,
 }) => {
   const { currentUser } = useAuth();
+  const isSale = property.listingCategory === 'sale';
+
+  const defaultInitialMessage = isSale
+    ? `Hello ${property.landlordName}, I would like to formally enquire about ${property.name}, in ${property.suburb}, ${property.city}. I am Interested to buy, Please reply confirming if the property is still available for sell and the terms of Purchase`
+    : `Hello ${property.landlordName}, I would like to formally apply to rent your property "${property.name}" in ${property.suburb}, ${property.city}.`;
 
   const [applicantName, setApplicantName] = useState(currentUser?.name || '');
   const [applicantPhone, setApplicantPhone] = useState(
@@ -33,14 +38,20 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
   const [occupantsCount, setOccupantsCount] = useState(1);
   const [monthlyIncomeUsd, setMonthlyIncomeUsd] = useState('');
   const [employmentStatus, setEmploymentStatus] = useState('');
-  const [message, setMessage] = useState(
-    `Hello ${property.landlordName}, I would like to formally apply to rent your property "${property.name}" in ${property.suburb}, ${property.city}.`
-  );
+  const [message, setMessage] = useState(defaultInitialMessage);
   const [appliedSuccess, setAppliedSuccess] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Dynamic Landlord Contact Synchronization
+  // Dynamic Landlord/Seller Contact Synchronization
   const [activeLandlordPhone, setActiveLandlordPhone] = useState(property.landlordPhone);
+
+  useEffect(() => {
+    setMessage(
+      isSale
+        ? `Hello ${property.landlordName}, I would like to formally enquire about ${property.name}, in ${property.suburb}, ${property.city}. I am Interested to buy, Please reply confirming if the property is still available for sell and the terms of Purchase`
+        : `Hello ${property.landlordName}, I would like to formally apply to rent your property "${property.name}" in ${property.suburb}, ${property.city}.`
+    );
+  }, [isSale, property.landlordName, property.name, property.suburb, property.city]);
 
   useEffect(() => {
     let isMounted = true;
@@ -95,24 +106,29 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
       setFormError('Please enter your phone number for communications.');
       return;
     }
-    if (!applicantEmail.trim()) {
+    if (!isSale && !applicantEmail.trim()) {
       setFormError('Please enter your email address.');
       return;
     }
-    if (!moveInDate.trim()) {
-      setFormError('Please select your proposed move-in date.');
-      return;
+
+    // Rental-specific field validation (Requirement 2: removed on property for sale)
+    if (!isSale) {
+      if (!moveInDate.trim()) {
+        setFormError('Please select your proposed move-in date.');
+        return;
+      }
+      if (!occupantsCount || occupantsCount < 1) {
+        setFormError('Please enter a valid occupants count (minimum 1).');
+        return;
+      }
+      if (!employmentStatus.trim()) {
+        setFormError('Please choose your employment status / profession.');
+        return;
+      }
     }
-    if (!occupantsCount || occupantsCount < 1) {
-      setFormError('Please enter a valid occupants count (minimum 1).');
-      return;
-    }
-    if (!employmentStatus.trim()) {
-      setFormError('Please choose your employment status / profession.');
-      return;
-    }
+
     if (!message.trim()) {
-      setFormError('Please provide a message or intro for the landlord.');
+      setFormError(isSale ? 'Please provide a message for the seller.' : 'Please provide a message or intro for the landlord.');
       return;
     }
 
@@ -130,9 +146,9 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
       applicantName: applicantName.trim(),
       applicantPhone: applicantPhone.trim(),
       applicantEmail: applicantEmail.trim(),
-      proposedMoveInDate: moveInDate,
-      occupantsCount: Number(occupantsCount),
-      employmentStatus: employmentStatus.trim(),
+      proposedMoveInDate: isSale ? 'Purchase Enquiry' : moveInDate,
+      occupantsCount: isSale ? 1 : Number(occupantsCount),
+      employmentStatus: isSale ? 'Prospective Buyer' : employmentStatus.trim(),
       monthlyIncomeUsd: incomeValue,
       message: message.trim(),
       status: 'pending',
@@ -152,13 +168,15 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
       await offlineSyncService.enqueueAction('submit_application', cleanApplication);
     }
 
-    // 3. Create real-time in-app notification for the landlord
+    // 3. Create real-time in-app notification for the landlord / seller
     const notifId = `notif_${Date.now()}`;
     const landlordNotification: NotificationItem = {
       id: notifId,
       userId: property.landlordId,
-      title: `New Rental Application for ${property.name}`,
-      message: `${applicantName.trim()} applied for "${property.name}". Move-in: ${moveInDate}. Employment: ${employmentStatus.trim()}. Occupants: ${occupantsCount}. Contact: ${applicantPhone.trim()}${incomeValue ? `, Income: $${incomeValue} USD` : ''}. Message: "${message.trim()}".`,
+      title: isSale ? `New Purchase Enquiry/Order for ${property.name}` : `New Rental Application for ${property.name}`,
+      message: isSale
+        ? `${applicantName.trim()} submitted a purchase order enquiry for "${property.name}" ($${(property.askingPriceUsd || property.rentUsd).toLocaleString()} USD, ${property.paymentType || 'Once off payment'}). Contact: ${applicantPhone.trim()}. Message: "${message.trim()}".`
+        : `${applicantName.trim()} applied for "${property.name}". Move-in: ${moveInDate}. Employment: ${employmentStatus.trim()}. Occupants: ${occupantsCount}. Contact: ${applicantPhone.trim()}${incomeValue ? `, Income: $${incomeValue} USD` : ''}. Message: "${message.trim()}".`,
       type: 'application_update',
       read: false,
       timestamp: Date.now(),
@@ -168,31 +186,47 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
     // Save locally to IndexedDB notifications table
     await db.notifications.put(landlordNotification);
 
-    // Persist in-app notification to Firestore so the landlord's device receives real-time alert
+    // Persist in-app notification to Firestore so the recipient's device receives real-time alert
     try {
       await setDoc(doc(firestoreDb, 'notifications', notifId), sanitizeForFirestore(landlordNotification));
     } catch (notifErr) {
       console.warn('Could not post notification to Firestore:', notifErr);
     }
 
-    // 4. Format WhatsApp message with full applicant and tenancy dossier
-    const rentBasisLabel = property.rentBasis ? ` ${property.rentBasis}` : '/month';
-    const waText =
-      `*Rental Application - Comfort Housing Hub Zimbabwe*\n\n` +
-      `*Property:* ${property.name}\n` +
-      `*Address:* ${property.address}, ${property.suburb}, ${property.city}\n` +
-      `*Rent:* $${property.rentUsd} USD${rentBasisLabel}\n` +
-      `*Deposit:* $${property.depositUsd} USD\n\n` +
-      `*--- Tenant Application Details ---*\n` +
-      `*Applicant Name:* ${applicantName.trim()}\n` +
-      `*Contact Phone:* ${applicantPhone.trim()}\n` +
-      `*Email Address:* ${applicantEmail.trim()}\n` +
-      `*Proposed Move-In Date:* ${moveInDate}\n` +
-      `*Number of Occupants:* ${occupantsCount}\n` +
-      `*Employment / Profession:* ${employmentStatus.trim()}\n` +
-      `*Monthly Income:* ${incomeValue ? `$${incomeValue} USD` : 'Not specified'}\n` +
-      `*Message from Applicant:*\n"${message.trim()}"\n\n` +
-      `_Sent via Comfort Housing & Rental Hub (Offline-First Zimbabwe Platform)_`;
+    // 4. Format WhatsApp message with full details
+    let waText = '';
+    if (isSale) {
+      waText =
+        `*Purchase Enquiry / Order - Comfort Housing Hub Zimbabwe*\n\n` +
+        `*Property for Sale:* ${property.name}\n` +
+        `*Location:* ${property.address || `${property.suburb}, ${property.city}`}\n` +
+        `*Asking Price:* $${(property.askingPriceUsd || property.rentUsd).toLocaleString()} USD\n` +
+        `*Payment Terms:* ${property.paymentType || 'Once off payment'}\n\n` +
+        `*--- Prospective Buyer Details ---*\n` +
+        `*Buyer Name:* ${applicantName.trim()}\n` +
+        `*Contact Phone:* ${applicantPhone.trim()}\n` +
+        (applicantEmail.trim() ? `*Email Address:* ${applicantEmail.trim()}\n` : '') +
+        `*Message to the Seller:*\n"${message.trim()}"\n\n` +
+        `_Sent via Comfort Housing & Rental Hub (Zimbabwe Real Estate Platform)_`;
+    } else {
+      const rentBasisLabel = property.rentBasis ? ` ${property.rentBasis}` : '/month';
+      waText =
+        `*Rental Application - Comfort Housing Hub Zimbabwe*\n\n` +
+        `*Property:* ${property.name}\n` +
+        `*Address:* ${property.address}, ${property.suburb}, ${property.city}\n` +
+        `*Rent:* $${property.rentUsd} USD${rentBasisLabel}\n` +
+        `*Deposit:* $${property.depositUsd} USD\n\n` +
+        `*--- Tenant Application Details ---*\n` +
+        `*Applicant Name:* ${applicantName.trim()}\n` +
+        `*Contact Phone:* ${applicantPhone.trim()}\n` +
+        `*Email Address:* ${applicantEmail.trim()}\n` +
+        `*Proposed Move-In Date:* ${moveInDate}\n` +
+        `*Number of Occupants:* ${occupantsCount}\n` +
+        `*Employment / Profession:* ${employmentStatus.trim()}\n` +
+        `*Monthly Income:* ${incomeValue ? `$${incomeValue} USD` : 'Not specified'}\n` +
+        `*Message from Applicant:*\n"${message.trim()}"\n\n` +
+        `_Sent via Comfort Housing & Rental Hub (Offline-First Zimbabwe Platform)_`;
+    }
 
     // Normalize phone number for WhatsApp
     let cleanLandlordPhone = activeLandlordPhone.replace(/\D/g, '');
@@ -222,17 +256,25 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-3 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden p-5 animate-in zoom-in-95 duration-150 my-auto">
-        {/* Header */}
+        {/* Header (Requirement 2: Direct purchase Enquiry/Order on top for sale) */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-200">
           <div>
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">
-              Direct Landlord Application
+            <span
+              className={`text-[11px] font-extrabold uppercase tracking-wider block ${
+                isSale ? 'text-amber-800' : 'text-emerald-700'
+              }`}
+            >
+              {isSale ? 'Direct purchase Enquiry/Order' : 'Direct Landlord Application'}
             </span>
             <h3 className="font-extrabold text-base sm:text-lg text-slate-900 leading-tight">
-              Apply for {property.name}
+              {isSale ? `Enquire about ${property.name}` : `Apply for ${property.name}`}
             </h3>
             <p className="text-xs text-slate-500">
-              ${property.rentUsd} USD {property.rentBasis || '/month'} • {property.suburb}, {property.city}
+              {isSale
+                ? `$${(property.askingPriceUsd || property.rentUsd).toLocaleString()} USD • Terms: ${
+                    property.paymentType || 'Once off payment'
+                  } • ${property.suburb}, ${property.city}`
+                : `$${property.rentUsd} USD ${property.rentBasis || '/month'} • ${property.suburb}, ${property.city}`}
             </p>
           </div>
           <button
@@ -250,10 +292,10 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
               <CheckCircle2 className="w-8 h-8 animate-bounce" />
             </div>
             <h4 className="text-lg font-extrabold text-slate-900">
-              Application Submitted!
+              {isSale ? 'Purchase Enquiry Order Dispatched!' : 'Application Submitted!'}
             </h4>
             <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-              Your rental application has been saved to the database, opened on WhatsApp to <strong>{property.landlordName}</strong>, and an in-app notification has been dispatched to the landlord’s dashboard.
+              Your {isSale ? 'purchase enquiry order' : 'rental application'} has been saved to the database, opened on WhatsApp to <strong>{property.landlordName}</strong>, and an in-app notification has been dispatched to the {isSale ? 'seller’s' : 'landlord’s'} dashboard.
             </p>
           </div>
         ) : (
@@ -292,99 +334,112 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Email Address <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={applicantEmail}
-                  onChange={e => setApplicantEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Proposed Move-In Date <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={moveInDate}
-                  onChange={e => setMoveInDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Number of Occupants <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  required
-                  min={1}
-                  max={20}
-                  value={occupantsCount}
-                  onChange={e => setOccupantsCount(Math.max(1, Number(e.target.value)))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Monthly Income (USD)
-                </label>
-                <input
-                  type="number"
-                  placeholder="(Optional)"
-                  value={monthlyIncomeUsd}
-                  onChange={e => setMonthlyIncomeUsd(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
-                />
-              </div>
-            </div>
-
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Employment / Profession <span className="text-rose-500">*</span>
+                Email Address{' '}
+                {isSale ? (
+                  <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
+                ) : (
+                  <span className="text-rose-500">*</span>
+                )}
               </label>
-              <select
-                required
-                value={employmentStatus}
-                onChange={e => setEmploymentStatus(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs bg-white text-slate-800 font-medium cursor-pointer"
-              >
-                <option value="">Select employment status...</option>
-                <option value="Self Employed (Own Business)">Self Employed (Own Business)</option>
-                <option value="Formally Employed">Formally Employed</option>
-                <option value="Unemployed">Unemployed</option>
-                <option value="Choose Not to Say">Choose Not to Say</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Message to Landlord <span className="text-rose-500">*</span>
-              </label>
-              <textarea
-                rows={2}
-                required
-                value={message}
-                onChange={e => setMessage(e.target.value)}
+              <input
+                type="email"
+                required={!isSale}
+                value={applicantEmail}
+                onChange={e => setApplicantEmail(e.target.value)}
+                placeholder={isSale ? 'e.g. buyer@example.com (optional)' : 'e.g. tenant@example.com'}
                 className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
               />
             </div>
 
-            {/* Landlord Contact Info Strip (Dynamically Synchronized) */}
+            {/* Rental specific inputs: Proposed Move-in Date and Number of Occupants are REMOVED for sale properties (Requirement 2) */}
+            {!isSale && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Proposed Move-In Date <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={moveInDate}
+                      onChange={e => setMoveInDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Number of Occupants <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={20}
+                      value={occupantsCount}
+                      onChange={e => setOccupantsCount(Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Employment / Profession <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={employmentStatus}
+                      onChange={e => setEmploymentStatus(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs bg-white text-slate-800 font-medium cursor-pointer"
+                    >
+                      <option value="">Select employment status...</option>
+                      <option value="Self Employed (Own Business)">Self Employed (Own Business)</option>
+                      <option value="Formally Employed">Formally Employed</option>
+                      <option value="Unemployed">Unemployed</option>
+                      <option value="Choose Not to Say">Choose Not to Say</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Monthly Income (USD)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="(Optional)"
+                      value={monthlyIncomeUsd}
+                      onChange={e => setMonthlyIncomeUsd(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Message to Landlord / Message to the Seller (Requirement 2) */}
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                {isSale ? 'Message to the Seller' : 'Message to Landlord'}{' '}
+                <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                required
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs leading-relaxed"
+              />
+            </div>
+
+            {/* Seller / Landlord Contact Info Strip (Dynamically Synchronized) */}
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-slate-600">
               <span className="font-semibold text-slate-800">
-                Landlord: {property.landlordName}
+                {isSale ? 'Seller / Agent' : 'Landlord'}: {property.landlordName}
               </span>
               <span className="text-emerald-800 font-medium flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -403,10 +458,16 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-bold transition shadow-sm cursor-pointer"
+                className={`flex items-center justify-center gap-2 px-5 py-2.5 text-white rounded-xl font-bold transition shadow-sm cursor-pointer active:scale-98 ${
+                  isSale ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
               >
                 <MessageCircle className="w-4 h-4 fill-white" />
-                <span>Submit Application on WhatsApp</span>
+                <span>
+                  {isSale
+                    ? 'Submit WhatsApp Purchase/Enquiry Order'
+                    : 'Submit Application on WhatsApp'}
+                </span>
               </button>
             </div>
           </form>

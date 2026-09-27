@@ -82,7 +82,12 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
     if (navigator.share) {
       navigator.share({
         title: property.name,
-        text: `Check out this rental in ${property.suburb}, ${property.city} for $${property.rentUsd}/mo with Solar & Borehole on Comfort Housing Hub!`,
+        text:
+          property.listingCategory === 'sale'
+            ? `Check out this property for sale in ${property.suburb}, ${property.city} for $${(
+                property.askingPriceUsd || property.rentUsd
+              ).toLocaleString()} on Comfort Housing Hub!`
+            : `Check out this rental in ${property.suburb}, ${property.city} for $${property.rentUsd}/mo with Solar & Borehole on Comfort Housing Hub!`,
         url: window.location.href,
       }).catch(() => {});
     } else {
@@ -189,12 +194,17 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
                 <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
                   {property.propertyType}
                 </span>
-                {property.availability === 'Occupied' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
-                    Taken / Occupied
+                {property.listingCategory === 'sale' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
+                    Property for Sale
                   </span>
                 )}
-                {property.rentBasis && (
+                {property.availability === 'Occupied' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
+                    {property.listingCategory === 'sale' ? 'Property Sold' : 'Taken / Occupied'}
+                  </span>
+                )}
+                {property.listingCategory !== 'sale' && property.rentBasis && (
                   <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
                     Billed {property.rentBasis}
                   </span>
@@ -281,14 +291,11 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
                   </>
                 )}
               </div>
-              {property.rentZig && (
-                <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md inline-block mt-0.5 border border-emerald-200">
-                  ~ZiG {property.rentZig.toLocaleString()}
-                </div>
-              )}
               {property.listingCategory === 'sale' ? (
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Payment: {property.paymentType || 'Once off payment'}
+                <p className="text-[11px] text-amber-900 font-semibold mt-1">
+                  {property.paymentType === 'Installments'
+                    ? 'Payment: Installments • Further installments calculations will be done on successful engagement'
+                    : 'Payment: Once off purchase'}
                 </p>
               ) : (
                 <p className="text-[11px] text-slate-500 mt-1">
@@ -392,65 +399,99 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
             </div>
           </div>
 
-          {/* Move-in Cost Estimator Widget */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
+          {/* Purchase Terms / Move-in Cost Estimator (Requirement 1: Remove move-in calculator for sale listings) */}
+          {property.listingCategory === 'sale' ? (
+            <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Calculator className="w-4 h-4 text-emerald-700" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                  Move-In Budget Estimator
+                <div className="p-1.5 rounded-lg bg-amber-600 text-white">
+                  <Tag className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-950">
+                  {property.paymentType === 'Installments'
+                    ? 'Installment Purchase Option'
+                    : 'Full Once-Off Purchase'}
                 </h4>
               </div>
-              <button
-                onClick={() => setShowCalculator(!showCalculator)}
-                className="text-xs font-semibold text-emerald-700 hover:underline"
-              >
-                {showCalculator ? 'Hide' : 'Calculate'}
-              </button>
-            </div>
-
-            {showCalculator && (
-              <div className="space-y-3 pt-2 text-xs text-slate-700 border-t border-slate-200">
-                <div className="flex items-center justify-between">
-                  <span>Advance Rent Months:</span>
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3].map(m => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMonthsAdvance(m)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                          monthsAdvance === m
-                            ? 'bg-emerald-700 text-white'
-                            : 'bg-white border border-slate-300 text-slate-700'
-                        }`}
-                      >
-                        {m} mo
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200">
-                  <div className="flex justify-between">
-                    <span>1st Month Rent ({monthsAdvance}x):</span>
-                    <span className="font-semibold">${property.rentUsd * monthsAdvance}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Security Deposit (Refundable):</span>
-                    <span className="font-semibold">${property.depositUsd}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-slate-100 pt-1.5 font-bold text-slate-900 text-sm">
-                    <span>Estimated Total Move-in:</span>
-                    <span className="text-emerald-800">${totalMoveInCost}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 italic text-center pt-2 border-t border-dashed border-slate-200 mt-1">
-                    In some cases, agents fees may apply.
+              {property.paymentType === 'Installments' ? (
+                <div className="space-y-1 text-xs">
+                  <p className="font-extrabold text-amber-950 text-xs">
+                    Further installments calculations will be done on successful engagement.
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Submit your WhatsApp purchase enquiry order or contact the seller to structure initial deposit, monthly installment amounts, and agreement schedule.
                   </p>
                 </div>
+              ) : (
+                <div className="space-y-1 text-xs text-amber-900">
+                  <p className="font-bold text-amber-950">
+                    Full Purchase Price: ${(property.askingPriceUsd || property.rentUsd).toLocaleString()} USD
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Full once-off purchase payable upon execution of Agreement of Sale and title deeds transfer verification.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-emerald-700" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Move-In Budget Estimator
+                  </h4>
+                </div>
+                <button
+                  onClick={() => setShowCalculator(!showCalculator)}
+                  className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
+                >
+                  {showCalculator ? 'Hide' : 'Calculate'}
+                </button>
               </div>
-            )}
-          </div>
+
+              {showCalculator && (
+                <div className="space-y-3 pt-2 text-xs text-slate-700 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <span>Advance Rent Months:</span>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3].map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setMonthsAdvance(m)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            monthsAdvance === m
+                              ? 'bg-emerald-700 text-white'
+                              : 'bg-white border border-slate-300 text-slate-700'
+                          }`}
+                        >
+                          {m} mo
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200">
+                    <div className="flex justify-between">
+                      <span>1st Month Rent ({monthsAdvance}x):</span>
+                      <span className="font-semibold">${property.rentUsd * monthsAdvance}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Security Deposit (Refundable):</span>
+                      <span className="font-semibold">${property.depositUsd}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-100 pt-1.5 font-bold text-slate-900 text-sm">
+                      <span>Estimated Total Move-in:</span>
+                      <span className="text-emerald-800">${totalMoveInCost}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 italic text-center pt-2 border-t border-dashed border-slate-200 mt-1">
+                      In some cases, agents fees may apply.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Landlord Contact Card */}
           <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -477,7 +518,11 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
               </a>
 
               <a
-                href={`https://wa.me/${cleanPhone}?text=Hello, I am inquiring about your property "${property.name}" on Comfort Housing Hub.`}
+                href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                  property.listingCategory === 'sale'
+                    ? `Hello ${property.landlordName}, I would like to formally enquire about ${property.name}, in ${property.suburb}, ${property.city}. I am Interested to buy, Please reply confirming if the property is still available for sell and the terms of Purchase`
+                    : `Hello ${property.landlordName}, I am inquiring about your rental property "${property.name}" on Comfort Housing Hub.`
+                )}`}
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => recordPropertyView(property.id, 'cta_click')}
