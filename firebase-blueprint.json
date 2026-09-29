@@ -295,12 +295,26 @@
         "amenitiesPreferred": { "type": "array" },
         "budgetUsd": { "type": "number" },
         "description": { "type": "string", "maxLength": 3000 },
-        "status": { "type": "string", "enum": ["active", "fulfilled", "cancelled"] },
+        "status": { "type": "string", "enum": ["active", "fulfilled", "cancelled", "found"] },
         "offersCount": { "type": "number" },
+        "views": { "type": "number" },
+        "foundAt": { "type": "number" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }
       },
       "required": ["id", "tenantId", "tenantName", "tenantPhone", "propertyTypeNeeded", "locationPreferred", "budgetUsd", "createdAt", "status"]
+    },
+    "SavedPropertyNeeded": {
+      "title": "SavedPropertyNeeded",
+      "description": "User saved/liked property needed requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "propertyNeededId": { "type": "string", "maxLength": 128 },
+        "savedAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "propertyNeededId", "savedAt"]
     },
     "PropertyOffer": {
       "title": "PropertyOffer",
@@ -380,6 +394,10 @@
     "/propertiesNeeded/{requestId}": {
       "schema": "PropertyNeeded",
       "description": "Tenant accommodation requests"
+    },
+    "/savedPropertiesNeeded/{savedId}": {
+      "schema": "SavedPropertyNeeded",
+      "description": "User saved/liked property needed requests"
     },
     "/propertyOffers/{offerId}": {
       "schema": "PropertyOffer",

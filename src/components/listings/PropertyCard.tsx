@@ -16,11 +16,13 @@ import {
   Home,
   Tag,
   Briefcase,
+  Share2,
 } from 'lucide-react';
 import { db } from '../../db/db';
 import { useAuth } from '../../context/AuthContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { recordPropertyView } from '../../services/statsService';
+import { ShareModal } from '../common/ShareModal';
 
 interface PropertyCardProps {
   property: Property;
@@ -41,6 +43,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Check if saved
   const isSaved = useLiveQuery(
@@ -105,8 +108,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   const occupiedText = getOccupiedCountdown();
 
   return (
-    <div
-      onClick={() => {
+    <>
+      <div
+        onClick={() => {
         recordPropertyView(property.id, 'expand_details');
         onSelect(property);
       }}
@@ -172,8 +176,18 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           )}
         </div>
 
-        {/* Action icons right: Favorite + Compare */}
+        {/* Action icons right: Share + Compare + Favorite */}
         <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              setShowShareModal(true);
+            }}
+            className="p-1.5 rounded-full backdrop-blur-md bg-white/80 text-slate-700 hover:bg-white hover:text-emerald-700 transition"
+            title="Share property to social platforms"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={e => {
               e.stopPropagation();
@@ -367,5 +381,15 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         </div>
       </div>
     </div>
-  );
+
+    {/* Social Platform Share Modal */}
+    {showShareModal && (
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        property={property}
+      />
+    )}
+  </>
+);
 };

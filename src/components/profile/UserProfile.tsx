@@ -19,17 +19,32 @@ import {
   LogIn,
   AlertCircle,
   Download,
+  Sparkles,
+  Clock,
+  Building2,
+  DollarSign,
+  Eye,
+  Heart,
+  Share2,
+  Trash2,
+  Plus,
 } from 'lucide-react';
-import { UserRole, User } from '../../types';
+import { UserRole, User, PropertyNeeded } from '../../types';
 import { compressImage } from '../../services/imageCompression';
 import { db as firestoreDb } from '../../db/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { EditPropertyNeededModal } from '../tenants/EditPropertyNeededModal';
+import { ShareModal } from '../common/ShareModal';
 
 interface UserProfileProps {
   onOpenAuthModal?: () => void;
+  onOpenCreatePropertyNeeded?: () => void;
 }
 
-export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => {
+export const UserProfile: React.FC<UserProfileProps> = ({
+  onOpenAuthModal,
+  onOpenCreatePropertyNeeded,
+}) => {
   const {
     currentUser,
     role,
@@ -42,6 +57,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onOpenAuthModal }) => 
     refreshRegisteredUsers,
     logout,
   } = useAuth();
+
+  // Navigation tab inside Profile: profile overview vs manage needed properties vs admin vs cache
+  const [activeProfileTab, setActiveProfileTab] = useState<'profile' | 'needed_properties' | 'admin' | 'db'>('profile');
+
+  // Properties Needed CRUD states
+  const [editingPropertyNeeded, setEditingPropertyNeeded] = useState<PropertyNeeded | null>(null);
+  const [sharingPropertyNeeded, setSharingPropertyNeeded] = useState<PropertyNeeded | null>(null);
+
+  // Live query for tenant's own property needed requests
+  const myPropertiesNeeded = useLiveQuery(
+    async () => {
+      if (!currentUser) return [];
+      return db.propertiesNeeded
+        .where('tenantId')
+        .equals(currentUser.id)
+        .reverse()
+        .sortBy('createdAt');
+    },
+    [currentUser?.id]
+  ) || [];
 
   // Admin users directory filtering
   const [searchTerm, setSearchTerm] = useState('');

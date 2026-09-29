@@ -41,6 +41,16 @@ export const PropertyList: React.FC<PropertyListProps> = ({
 }) => {
   const { role, currentUser } = useAuth();
 
+  // Role permissions:
+  // - Landlords, Property Managers, and Agents have read-only permissions to Properties Needed (they cannot post Property Needed)
+  // - Tenants do not have write/update permissions to property listings (cannot Add Property Listing)
+  // - Only Admins can both Add Property and post Property Needed
+  const isLandlordOrAgent = role === 'landlord' || role === 'property_manager' || role === 'agent';
+  const isAdmin = role === 'admin';
+  const isTenant = role === 'tenant';
+  const canPostPropertyNeeded = isAdmin || isTenant || (!currentUser && !isLandlordOrAgent);
+  const canAddPropertyListing = isAdmin || isLandlordOrAgent;
+
   // Demarcation State: 'available' (Owners & Agents) vs 'needed' (Tenant Requests)
   const [mainListingMode, setMainListingMode] = useState<'available' | 'needed'>('available');
 
@@ -194,6 +204,15 @@ export const PropertyList: React.FC<PropertyListProps> = ({
     return allPropertiesNeeded
       .filter(req => req.status !== 'cancelled')
       .filter(req => {
+        // Disappear from active listings if marked found for >= 24 hours
+        if (req.status === 'found' || req.status === 'fulfilled') {
+          const foundTimestamp = req.foundAt || req.updatedAt || req.createdAt;
+          const elapsed = Date.now() - foundTimestamp;
+          if (elapsed >= 24 * 60 * 60 * 1000) {
+            return false; // Disappears after 24 hours
+          }
+        }
+
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchesType = req.propertyTypeNeeded?.toLowerCase().includes(q);
@@ -251,6 +270,30 @@ export const PropertyList: React.FC<PropertyListProps> = ({
   ]);
 
   const visibleProperties = filteredProperties.slice(0, displayCount);
+
+  // Deep-linking from shared social links (e.g., ?property=id or ?propertyNeeded=id)
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const propId = params.get('property');
+      const needId = params.get('propertyNeeded');
+
+      if (propId && allProperties.length > 0) {
+        const found = allProperties.find(p => p.id === propId);
+        if (found) {
+          setSelectedProperty(found);
+        }
+      } else if (needId && allPropertiesNeeded.length > 0) {
+        setMainListingMode('needed');
+        const foundNeed = allPropertiesNeeded.find(n => n.id === needId);
+        if (foundNeed) {
+          setSearchQuery(foundNeed.propertyTypeNeeded || foundNeed.locationPreferred || '');
+        }
+      }
+    } catch (e) {
+      console.warn('URL params parsing error:', e);
+    }
+  }, [allProperties, allPropertiesNeeded]);
 
   const toggleCompare = (p: Property) => {
     if (comparedProperties.some(c => c.id === p.id)) {
@@ -376,7 +419,7 @@ export const PropertyList: React.FC<PropertyListProps> = ({
           {/* Quick Create Action depending on mode */}
           <div className="flex items-center justify-end">
             {mainListingMode === 'available' ? (
-              (role === 'landlord' || role === 'property_manager' || role === 'agent' || role === 'admin') && (
+              canAddPropertyListing && (
                 <button
                   type="button"
                   onClick={onOpenCreateListing}
@@ -387,14 +430,16 @@ export const PropertyList: React.FC<PropertyListProps> = ({
                 </button>
               )
             ) : (
-              <button
-                type="button"
-                onClick={onOpenCreatePropertyNeeded}
-                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Create Rental Property Needed</span>
-              </button>
+              canPostPropertyNeeded && (
+                <button
+                  type="button"
+                  onClick={onOpenCreatePropertyNeeded}
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Create Rental Property Needed</span>
+                </button>
+              )
             )}
           </div>
         </div>
@@ -480,14 +525,16 @@ export const PropertyList: React.FC<PropertyListProps> = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onOpenCreatePropertyNeeded}
-              className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs transition shadow-2xs cursor-pointer self-start sm:self-auto shrink-0 flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Post Your Rental Need</span>
-            </button>
+            {canPostPropertyNeeded && (
+              <button
+                type="button"
+                onClick={onOpenCreatePropertyNeeded}
+                className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs transition shadow-2xs cursor-pointer self-start sm:self-auto shrink-0 flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Post Your Rental Need</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -535,18 +582,17 @@ export const PropertyList: React.FC<PropertyListProps> = ({
           </button>
 
           {/* Add Listing Button for Landlords, Property Managers, Agents & Admins (Mobile shortcut) */}
-          {mainListingMode === 'available' &&
-            (role === 'landlord' || role === 'property_manager' || role === 'agent' || role === 'admin') && (
-              <button
-                onClick={onOpenCreateListing}
-                className="flex md:hidden items-center justify-center p-2 rounded-xl bg-emerald-700 text-white shadow-2xs hover:bg-emerald-800 transition"
-                title="Add Listing"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            )}
+          {mainListingMode === 'available' && canAddPropertyListing && (
+            <button
+              onClick={onOpenCreateListing}
+              className="flex md:hidden items-center justify-center p-2 rounded-xl bg-emerald-700 text-white shadow-2xs hover:bg-emerald-800 transition"
+              title="Add Listing"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
 
-          {mainListingMode === 'needed' && (
+          {mainListingMode === 'needed' && canPostPropertyNeeded && (
             <button
               onClick={onOpenCreatePropertyNeeded}
               className="flex md:hidden items-center justify-center p-2 rounded-xl bg-teal-700 text-white shadow-2xs hover:bg-teal-800 transition"
@@ -669,16 +715,20 @@ export const PropertyList: React.FC<PropertyListProps> = ({
                 No accommodation requests match your search
               </h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Are you looking for accommodation anywhere in Zimbabwe? Post your required room type, preferred location, and budget. Landlords and verified agents will review your request and send you direct offers.
+                {isLandlordOrAgent
+                  ? 'There are currently no matching tenant accommodation requests in this category. Check back regularly or review active inquiries.'
+                  : 'Are you looking for accommodation anywhere in Zimbabwe? Post your required room type, preferred location, and budget. Landlords and verified agents will review your request and send you direct offers.'}
               </p>
-              <button
-                type="button"
-                onClick={onOpenCreatePropertyNeeded}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Create Rental Property Needed</span>
-              </button>
+              {canPostPropertyNeeded && (
+                <button
+                  type="button"
+                  onClick={onOpenCreatePropertyNeeded}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Create Rental Property Needed</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

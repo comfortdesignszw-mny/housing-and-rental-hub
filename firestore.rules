@@ -365,7 +365,7 @@ service cloud.firestore {
         data.propertyTypeNeeded is string && data.propertyTypeNeeded.size() <= 100 &&
         data.locationPreferred is string && data.locationPreferred.size() <= 150 &&
         data.budgetUsd is number && data.budgetUsd >= 0 &&
-        data.status in ['active', 'fulfilled', 'cancelled'] &&
+        data.status in ['active', 'fulfilled', 'cancelled', 'found'] &&
         data.createdAt is number;
     }
 
@@ -391,7 +391,13 @@ service cloud.firestore {
       );
     }
 
-    // 14. Property Owners Offers to Tenants
+    // 14. Saved Properties Needed (Hearts / Likes)
+    match /savedPropertiesNeeded/{savedId} {
+      allow get, list: if true;
+      allow create, update, delete: if true;
+    }
+
+    // 15. Property Owners Offers to Tenants
     function isValidPropertyOffer(data) {
       return data.keys().hasAll(['id', 'propertyNeededId', 'tenantId', 'landlordId', 'propertyName', 'rentUsd', 'createdAt', 'status']) &&
         data.id is string && data.id.size() <= 128 &&

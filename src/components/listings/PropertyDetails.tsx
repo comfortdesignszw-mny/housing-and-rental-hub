@@ -28,6 +28,7 @@ import { useAuth } from '../../context/AuthContext';
 import { db } from '../../db/db';
 import { offlineSyncService } from '../../services/offlineSync';
 import { recordPropertyView, recordPropertyRating } from '../../services/statsService';
+import { ShareModal } from '../common/ShareModal';
 
 interface PropertyDetailsProps {
   property: Property;
@@ -44,6 +45,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -79,21 +81,7 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
   };
 
   const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: property.name,
-        text:
-          property.listingCategory === 'sale'
-            ? `Check out this property for sale in ${property.suburb}, ${property.city} for $${(
-                property.askingPriceUsd || property.rentUsd
-              ).toLocaleString()} on Comfort Housing Hub!`
-            : `Check out this rental in ${property.suburb}, ${property.city} for $${property.rentUsd}/mo with Solar & Borehole on Comfort Housing Hub!`,
-        url: window.location.href,
-      }).catch(() => {});
-    } else {
-      navigator.clipboard?.writeText(window.location.href);
-      showToast('Listing link copied to clipboard!');
-    }
+    setShowShareModal(true);
   };
 
   // Live landlord profile subscription for real-time updated WhatsApp & phone contacts
@@ -594,6 +582,15 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
         onClose={() => setShowApplyModal(false)}
         onSuccess={() => showToast('Application submitted on WhatsApp & recorded!')}
       />
+
+      {/* Social Platform Share Modal */}
+      {showShareModal && (
+        <ShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          property={currentProp}
+        />
+      )}
     </div>
   );
 };

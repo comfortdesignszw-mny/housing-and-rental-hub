@@ -55,3 +55,28 @@ export async function recordPropertyRating(
     console.debug('Rating recording note:', err);
   }
 }
+
+/**
+ * Optimizes and records views and engagement on tenant Property Needed requests.
+ */
+export async function recordPropertyNeededView(
+  propertyNeededId: string,
+  _actionType: 'view' | 'cta_click' = 'view'
+): Promise<void> {
+  if (!propertyNeededId) return;
+
+  try {
+    // 1. Update local reactive IndexedDB cache
+    await db.propertiesNeeded.where('id').equals(propertyNeededId).modify(p => {
+      p.views = (p.views || 0) + 1;
+    });
+
+    // 2. Increment in Firestore
+    const needRef = doc(firestoreDb, 'propertiesNeeded', propertyNeededId);
+    await updateDoc(needRef, {
+      views: increment(1),
+    });
+  } catch (err) {
+    console.debug('Property needed view stats recording note:', err);
+  }
+}

@@ -267,6 +267,13 @@ export interface LikedRoommate {
   likedAt: number;
 }
 
+export interface SavedPropertyNeeded {
+  id: string;
+  userId: string;
+  propertyNeededId: string;
+  savedAt: number;
+}
+
 export interface PropertyNeeded {
   id: string;
   tenantId: string;
@@ -284,8 +291,10 @@ export interface PropertyNeeded {
   budgetUsd: number;
   description: string;
   contactPreference?: 'WhatsApp' | 'Phone Call' | 'Both';
-  status: 'active' | 'fulfilled' | 'cancelled';
+  status: 'active' | 'fulfilled' | 'cancelled' | 'found';
   offersCount?: number;
+  views?: number;
+  foundAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -339,6 +348,8 @@ export interface OfflineQueueItem {
     | 'create_listing'
     | 'update_listing'
     | 'create_property_needed'
+    | 'update_property_needed'
+    | 'delete_property_needed'
     | 'make_property_offer'
     | 'send_message'
     | 'submit_application'

@@ -126,7 +126,10 @@ function MainAppContent() {
         )}
 
         {currentTab === 'profile' && (
-          <UserProfile onOpenAuthModal={() => setShowAuthModal(true)} />
+          <UserProfile
+            onOpenAuthModal={() => setShowAuthModal(true)}
+            onOpenCreatePropertyNeeded={handleOpenCreatePropertyNeeded}
+          />
         )}
       </main>
 
