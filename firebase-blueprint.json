@@ -276,6 +276,56 @@
         "actionUrl": { "type": "string", "maxLength": 250 }
       },
       "required": ["id", "userId", "title", "message", "type", "read", "timestamp"]
+    },
+    "PropertyNeeded": {
+      "title": "PropertyNeeded",
+      "description": "Tenant property accommodation requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "tenantName": { "type": "string", "maxLength": 150 },
+        "tenantPhone": { "type": "string", "maxLength": 50 },
+        "tenantWhatsApp": { "type": "string", "maxLength": 50 },
+        "propertyTypeNeeded": { "type": "string", "maxLength": 100 },
+        "locationPreferred": { "type": "string", "maxLength": 150 },
+        "city": { "type": "string", "maxLength": 50 },
+        "suburb": { "type": "string", "maxLength": 100 },
+        "availabilityDate": { "type": "string", "maxLength": 50 },
+        "amenitiesPreferred": { "type": "array" },
+        "budgetUsd": { "type": "number" },
+        "description": { "type": "string", "maxLength": 3000 },
+        "status": { "type": "string", "enum": ["active", "fulfilled", "cancelled"] },
+        "offersCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "tenantId", "tenantName", "tenantPhone", "propertyTypeNeeded", "locationPreferred", "budgetUsd", "createdAt", "status"]
+    },
+    "PropertyOffer": {
+      "title": "PropertyOffer",
+      "description": "Offers submitted by landlords/agents for tenant accommodation requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "propertyNeededId": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "landlordId": { "type": "string", "maxLength": 128 },
+        "landlordName": { "type": "string", "maxLength": 150 },
+        "landlordPhone": { "type": "string", "maxLength": 50 },
+        "landlordWhatsApp": { "type": "string", "maxLength": 50 },
+        "propertyName": { "type": "string", "maxLength": 150 },
+        "propertyType": { "type": "string", "maxLength": 50 },
+        "location": { "type": "string", "maxLength": 150 },
+        "rentUsd": { "type": "number" },
+        "depositUsd": { "type": "number" },
+        "availableFrom": { "type": "string", "maxLength": 50 },
+        "amenities": { "type": "array" },
+        "notes": { "type": "string", "maxLength": 3000 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "propertyNeededId", "tenantId", "landlordId", "propertyName", "rentUsd", "createdAt", "status"]
     }
   },
   "firestore": {
@@ -326,6 +376,14 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "User notifications"
+    },
+    "/propertiesNeeded/{requestId}": {
+      "schema": "PropertyNeeded",
+      "description": "Tenant accommodation requests"
+    },
+    "/propertyOffers/{offerId}": {
+      "schema": "PropertyOffer",
+      "description": "Property offers submitted by owners/agents"
     }
   }
 }

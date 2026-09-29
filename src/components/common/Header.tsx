@@ -10,12 +10,14 @@ import { UserRole } from '../../types';
 interface HeaderProps {
   onOpenNotifications: () => void;
   onOpenCreateListing: () => void;
+  onOpenCreatePropertyNeeded?: () => void;
   onOpenAuthModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   onOpenCreateListing,
+  onOpenCreatePropertyNeeded,
   onOpenAuthModal,
 }) => {
   const { currentUser, role, isGuest, isAuthenticated, logout } = useAuth();
@@ -89,6 +91,16 @@ export const Header: React.FC<HeaderProps> = ({
               className="hidden md:flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs transition"
             >
               <span>+ Add Property</span>
+            </button>
+          )}
+
+          {/* Quick Create Rental Property Needed button for Tenants */}
+          {role === 'tenant' && onOpenCreatePropertyNeeded && (
+            <button
+              onClick={onOpenCreatePropertyNeeded}
+              className="hidden md:flex items-center gap-1 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs transition"
+            >
+              <span>+ Property Needed</span>
             </button>
           )}
 

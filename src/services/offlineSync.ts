@@ -109,6 +109,22 @@ export class OfflineSyncService {
             }
           }
 
+          // 8. Create Property Needed (Tenant Request)
+          else if (item.actionType === 'create_property_needed') {
+            const req = sanitizeForFirestore(item.payload);
+            if (req && req.id) {
+              await setDoc(doc(firestoreDb, 'propertiesNeeded', req.id), req, { merge: true });
+            }
+          }
+
+          // 9. Make Property Offer
+          else if (item.actionType === 'make_property_offer') {
+            const offer = sanitizeForFirestore(item.payload);
+            if (offer && offer.id) {
+              await setDoc(doc(firestoreDb, 'propertyOffers', offer.id), offer, { merge: true });
+            }
+          }
+
           // Mark item as synced
           await db.offlineQueue.update(item.id, { status: 'synced' });
           processed++;

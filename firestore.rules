@@ -354,5 +354,77 @@ service cloud.firestore {
 
       allow create: if isSignedIn() || (!isSignedIn() && isValidId(notificationId));
     }
+
+    // 13. Tenant Properties Needed Requests
+    function isValidPropertyNeeded(data) {
+      return data.keys().hasAll(['id', 'tenantId', 'tenantName', 'tenantPhone', 'propertyTypeNeeded', 'locationPreferred', 'budgetUsd', 'createdAt', 'status']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.tenantId is string && data.tenantId.size() <= 128 &&
+        data.tenantName is string && data.tenantName.size() <= 150 &&
+        data.tenantPhone is string && data.tenantPhone.size() <= 50 &&
+        data.propertyTypeNeeded is string && data.propertyTypeNeeded.size() <= 100 &&
+        data.locationPreferred is string && data.locationPreferred.size() <= 150 &&
+        data.budgetUsd is number && data.budgetUsd >= 0 &&
+        data.status in ['active', 'fulfilled', 'cancelled'] &&
+        data.createdAt is number;
+    }
+
+    match /propertiesNeeded/{requestId} {
+      allow get, list: if true;
+
+      allow create: if isValidId(requestId) && isValidPropertyNeeded(incoming()) && (
+        isSignedIn() ||
+        incoming().tenantId.matches('^(guest_|user_|tenant_).*') ||
+        isAdmin()
+      );
+
+      allow update: if isValidId(requestId) && (
+        isAdmin() ||
+        isSignedIn() ||
+        existing().tenantId.matches('^(guest_|user_|tenant_).*')
+      );
+
+      allow delete: if isValidId(requestId) && (
+        isAdmin() ||
+        (isSignedIn() && existing().tenantId == request.auth.uid) ||
+        existing().tenantId.matches('^(guest_|user_|tenant_).*')
+      );
+    }
+
+    // 14. Property Owners Offers to Tenants
+    function isValidPropertyOffer(data) {
+      return data.keys().hasAll(['id', 'propertyNeededId', 'tenantId', 'landlordId', 'propertyName', 'rentUsd', 'createdAt', 'status']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.propertyNeededId is string && data.propertyNeededId.size() <= 128 &&
+        data.tenantId is string && data.tenantId.size() <= 128 &&
+        data.landlordId is string && data.landlordId.size() <= 128 &&
+        data.propertyName is string && data.propertyName.size() <= 150 &&
+        data.rentUsd is number && data.rentUsd >= 0 &&
+        data.status in ['pending', 'accepted', 'declined'] &&
+        data.createdAt is number;
+    }
+
+    match /propertyOffers/{offerId} {
+      allow get, list: if true;
+
+      allow create: if isValidId(offerId) && isValidPropertyOffer(incoming()) && (
+        isSignedIn() ||
+        incoming().landlordId.matches('^(user_|guest_|landlord_|agent_).*') ||
+        isAdmin()
+      );
+
+      allow update: if isValidId(offerId) && (
+        isAdmin() ||
+        isSignedIn() ||
+        existing().tenantId.matches('^(guest_|user_|tenant_).*') ||
+        existing().landlordId.matches('^(user_|guest_|landlord_|agent_).*')
+      );
+
+      allow delete: if isValidId(offerId) && (
+        isAdmin() ||
+        (isSignedIn() && (existing().landlordId == request.auth.uid || existing().tenantId == request.auth.uid)) ||
+        existing().landlordId.matches('^(user_|guest_|landlord_|agent_).*')
+      );
+    }
   }
 }

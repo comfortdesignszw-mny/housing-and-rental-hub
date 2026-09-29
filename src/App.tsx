@@ -17,11 +17,15 @@ import { MessagingHub } from './components/messages/MessagingHub';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { UserProfile } from './components/profile/UserProfile';
 import { AuthModal } from './components/common/AuthModal';
+import { CreatePropertyNeededModal } from './components/tenants/CreatePropertyNeededModal';
 
 function MainAppContent() {
   const { isGuest } = useAuth();
   const [currentTab, setCurrentTab] = useState<NavTab>('listings');
   const [showCreateListing, setShowCreateListing] = useState(false);
+  const [showCreatePropertyNeeded, setShowCreatePropertyNeeded] = useState(false);
+  const [landlordSubTab, setLandlordSubTab] = useState<string | undefined>(undefined);
+  const [highlightedOfferId, setHighlightedOfferId] = useState<string | undefined>(undefined);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
@@ -53,6 +57,14 @@ function MainAppContent() {
     setShowCreateListing(true);
   };
 
+  const handleOpenCreatePropertyNeeded = () => {
+    if (isGuest) {
+      setShowAuthModal(true);
+      return;
+    }
+    setShowCreatePropertyNeeded(true);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white pb-20 md:pb-8">
       {/* Offline Status & Sync Queue Banner */}
@@ -62,6 +74,7 @@ function MainAppContent() {
       <Header
         onOpenNotifications={() => setShowNotifications(true)}
         onOpenCreateListing={handleOpenCreateListing}
+        onOpenCreatePropertyNeeded={handleOpenCreatePropertyNeeded}
         onOpenAuthModal={() => setShowAuthModal(true)}
       />
 
@@ -79,6 +92,7 @@ function MainAppContent() {
         {currentTab === 'listings' && (
           <PropertyList
             onOpenCreateListing={handleOpenCreateListing}
+            onOpenCreatePropertyNeeded={handleOpenCreatePropertyNeeded}
             onStartChat={handleStartChat}
           />
         )}
@@ -89,7 +103,10 @@ function MainAppContent() {
 
         {currentTab === 'landlord' && !isGuest && (
           <LandlordDashboard
+            initialSubTab={landlordSubTab}
+            highlightedOfferId={highlightedOfferId}
             onOpenCreateListing={handleOpenCreateListing}
+            onOpenCreatePropertyNeeded={handleOpenCreatePropertyNeeded}
             onStartChat={handleStartChat}
           />
         )}
@@ -123,6 +140,17 @@ function MainAppContent() {
         />
       )}
 
+      {/* Create Rental Property Needed Modal (Tenant Request) */}
+      {showCreatePropertyNeeded && (
+        <CreatePropertyNeededModal
+          isOpen={showCreatePropertyNeeded}
+          onClose={() => setShowCreatePropertyNeeded(false)}
+          onCreated={() => {
+            setCurrentTab('listings');
+          }}
+        />
+      )}
+
       {/* In-App Notifications Drawer */}
       <NotificationsDrawer
         isOpen={showNotifications}
@@ -140,6 +168,16 @@ function MainAppContent() {
               setCurrentTab('messages');
             }
           } else if (url?.startsWith('landlord')) {
+            const queryPart = url.includes('?') ? url.split('?')[1] : '';
+            const params = new URLSearchParams(queryPart);
+            const tab = params.get('tab');
+            const offerId = params.get('offerId');
+            if (tab) {
+              setLandlordSubTab(tab);
+            }
+            if (offerId) {
+              setHighlightedOfferId(offerId);
+            }
             setCurrentTab('landlord');
           } else if (url?.startsWith('listings')) {
             setCurrentTab('listings');

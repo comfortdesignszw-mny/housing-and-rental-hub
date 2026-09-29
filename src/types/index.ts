@@ -267,6 +267,53 @@ export interface LikedRoommate {
   likedAt: number;
 }
 
+export interface PropertyNeeded {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  tenantPhone: string;
+  tenantWhatsApp: string;
+  tenantEmail?: string;
+  propertyTypeNeeded: string; // e.g., '1 Room', '2 Rooms', 'Full House', 'Shared Room', '2 Bedroom Flat', 'Cottage', etc.
+  locationPreferred: string; // e.g. 'Avondale, Harare'
+  city: string;
+  suburb: string;
+  province?: string;
+  availabilityDate: string; // e.g. 'Immediate' or date
+  amenitiesPreferred: string[]; // e.g. ['Borehole Water', 'Prepaid ZESA', 'Solar System', 'Walled & Gated', 'Parking Space', 'Pet Friendly']
+  budgetUsd: number;
+  description: string;
+  contactPreference?: 'WhatsApp' | 'Phone Call' | 'Both';
+  status: 'active' | 'fulfilled' | 'cancelled';
+  offersCount?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PropertyOffer {
+  id: string;
+  propertyNeededId: string;
+  tenantId: string;
+  tenantName: string;
+  landlordId: string;
+  landlordName: string;
+  landlordRole?: 'landlord' | 'property_manager' | 'agent' | string;
+  landlordPhone: string;
+  landlordWhatsApp: string;
+  propertyId?: string;
+  propertyName: string;
+  propertyType: string;
+  location: string;
+  rentUsd: number;
+  depositUsd: number;
+  availableFrom: string;
+  amenities: string[];
+  photoUrl?: string;
+  notes: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: number;
+}
+
 export interface NotificationItem {
   id: string;
   userId: string;
@@ -279,6 +326,7 @@ export interface NotificationItem {
     | 'lease_expiry'
     | 'application_update'
     | 'maintenance_update'
+    | 'property_offer'
     | 'message';
   read: boolean;
   timestamp: number;
@@ -290,6 +338,8 @@ export interface OfflineQueueItem {
   actionType:
     | 'create_listing'
     | 'update_listing'
+    | 'create_property_needed'
+    | 'make_property_offer'
     | 'send_message'
     | 'submit_application'
     | 'submit_maintenance'

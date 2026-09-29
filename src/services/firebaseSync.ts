@@ -14,7 +14,16 @@ import {
 } from 'firebase/firestore';
 import { db as firestoreDb, auth, handleFirestoreError, OperationType, sanitizeForFirestore } from '../db/firebase';
 import { db as dexieDb } from '../db/db';
-import { Property, RoommateProfile, RentalApplication, Message, NotificationItem, User } from '../types';
+import {
+  Property,
+  RoommateProfile,
+  RentalApplication,
+  Message,
+  NotificationItem,
+  User,
+  PropertyNeeded,
+  PropertyOffer,
+} from '../types';
 
 class FirebaseSyncService {
   private publicUnsubscribers: Unsubscribe[] = [];
@@ -33,9 +42,10 @@ class FirebaseSyncService {
 
     // Fast initial population from Firestore into IndexedDB cache
     try {
-      const [propSnap, roomSnap] = await Promise.allSettled([
+      const [propSnap, roomSnap, neededSnap] = await Promise.allSettled([
         getDocs(query(collection(firestoreDb, 'properties'), limit(200))),
         getDocs(query(collection(firestoreDb, 'roommateProfiles'), limit(200))),
+        getDocs(query(collection(firestoreDb, 'propertiesNeeded'), limit(200))),
       ]);
 
       if (propSnap.status === 'fulfilled' && !propSnap.value.empty) {
@@ -48,6 +58,12 @@ class FirebaseSyncService {
         const rooms: RoommateProfile[] = [];
         roomSnap.value.forEach(d => rooms.push(d.data() as RoommateProfile));
         await dexieDb.roommateProfiles.bulkPut(rooms);
+      }
+
+      if (neededSnap.status === 'fulfilled' && !neededSnap.value.empty) {
+        const neededList: PropertyNeeded[] = [];
+        neededSnap.value.forEach(d => neededList.push(d.data() as PropertyNeeded));
+        await dexieDb.propertiesNeeded.bulkPut(neededList);
       }
 
       // Purge any stuck queue items with permission errors from previous runs
@@ -107,7 +123,6 @@ class FirebaseSyncService {
             profiles.push(docSnap.data() as RoommateProfile);
           });
 
-          // Only delete specific documents that were explicitly removed on Firestore
           snapshot.docChanges().forEach(async change => {
             if (change.type === 'removed') {
               await dexieDb.roommateProfiles.delete(change.doc.id);
@@ -126,6 +141,36 @@ class FirebaseSyncService {
       }
     );
     this.publicUnsubscribers.push(unsubRoommates);
+
+    // 3. Real-time Properties Needed Listener (Tenant Accommodation Requests)
+    const neededPath = 'propertiesNeeded';
+    const unsubNeeded = onSnapshot(
+      collection(firestoreDb, neededPath),
+      async snapshot => {
+        try {
+          const needed: PropertyNeeded[] = [];
+          snapshot.forEach(docSnap => {
+            needed.push(docSnap.data() as PropertyNeeded);
+          });
+
+          snapshot.docChanges().forEach(async change => {
+            if (change.type === 'removed') {
+              await dexieDb.propertiesNeeded.delete(change.doc.id);
+            }
+          });
+
+          if (needed.length > 0) {
+            await dexieDb.propertiesNeeded.bulkPut(needed);
+          }
+        } catch (syncErr) {
+          console.error('PropertiesNeeded sync error:', syncErr);
+        }
+      },
+      error => {
+        handleFirestoreError(error, OperationType.LIST, neededPath);
+      }
+    );
+    this.publicUnsubscribers.push(unsubNeeded);
   }
 
   /**
@@ -231,7 +276,54 @@ class FirebaseSyncService {
       );
       this.userUnsubscribers.push(unsubNotifs);
 
-      // 6. Registered Users Directory (Admin RBAC only)
+      // 6. Property Offers Listener (where user is tenant recipient)
+      const offersPath = 'propertyOffers';
+      const unsubTenantOffers = onSnapshot(
+        query(collection(firestoreDb, offersPath), where('tenantId', '==', userId)),
+        async snapshot => {
+          const offers: PropertyOffer[] = [];
+          snapshot.forEach(docSnap => {
+            offers.push(docSnap.data() as PropertyOffer);
+          });
+          snapshot.docChanges().forEach(async change => {
+            if (change.type === 'removed') {
+              await dexieDb.propertyOffers.delete(change.doc.id);
+            }
+          });
+          if (offers.length > 0) {
+            await dexieDb.propertyOffers.bulkPut(offers);
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.LIST, offersPath);
+        }
+      );
+      this.userUnsubscribers.push(unsubTenantOffers);
+
+      // 7. Property Offers Listener (where user is landlord/agent sender)
+      const unsubLandlordOffers = onSnapshot(
+        query(collection(firestoreDb, offersPath), where('landlordId', '==', userId)),
+        async snapshot => {
+          const offers: PropertyOffer[] = [];
+          snapshot.forEach(docSnap => {
+            offers.push(docSnap.data() as PropertyOffer);
+          });
+          snapshot.docChanges().forEach(async change => {
+            if (change.type === 'removed') {
+              await dexieDb.propertyOffers.delete(change.doc.id);
+            }
+          });
+          if (offers.length > 0) {
+            await dexieDb.propertyOffers.bulkPut(offers);
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.LIST, offersPath);
+        }
+      );
+      this.userUnsubscribers.push(unsubLandlordOffers);
+
+      // 8. Registered Users Directory (Admin RBAC only)
       if (isAdmin) {
         const usersPath = 'users';
         const unsubUsers = onSnapshot(
@@ -317,6 +409,16 @@ class FirebaseSyncService {
             const { id, ...data } = item.payload;
             if (id) {
               await setDoc(doc(firestoreDb, 'maintenanceRequests', id), sanitizeForFirestore(data), { merge: true });
+            }
+          } else if (item.actionType === 'create_property_needed') {
+            const req = sanitizeForFirestore(item.payload as PropertyNeeded);
+            if (req && req.id) {
+              await setDoc(doc(firestoreDb, 'propertiesNeeded', req.id), req, { merge: true });
+            }
+          } else if (item.actionType === 'make_property_offer') {
+            const offer = sanitizeForFirestore(item.payload as PropertyOffer);
+            if (offer && offer.id) {
+              await setDoc(doc(firestoreDb, 'propertyOffers', offer.id), offer, { merge: true });
             }
           }
 

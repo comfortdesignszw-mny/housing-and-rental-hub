@@ -12,6 +12,7 @@ import { LeaseManagement } from './LeaseManagement';
 import { MaintenanceTracker } from './MaintenanceTracker';
 import { CreateListingModal } from '../listings/CreateListingModal';
 import { PropertyDetails } from '../listings/PropertyDetails';
+import { TenantOffersSection } from '../tenants/TenantOffersSection';
 import {
   Building2,
   Users,
@@ -40,17 +41,35 @@ import {
 
 interface LandlordDashboardProps {
   onOpenCreateListing: () => void;
+  onOpenCreatePropertyNeeded?: () => void;
   onStartChat: (recipientId: string, recipientName: string) => void;
+  initialSubTab?: string;
+  highlightedOfferId?: string;
 }
 
 export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
   onOpenCreateListing,
+  onOpenCreatePropertyNeeded,
   onStartChat,
+  initialSubTab,
+  highlightedOfferId,
 }) => {
   const { currentUser, role, isGuest } = useAuth();
+  const isTenant = role === 'tenant';
+
   const [activeSubTab, setActiveSubTab] = useState<
-    'overview' | 'properties' | 'applications' | 'tenants' | 'rent' | 'leases' | 'maintenance'
-  >('overview');
+    'overview' | 'properties' | 'applications' | 'tenants' | 'rent' | 'leases' | 'maintenance' | 'property_offers'
+  >(() => {
+    if (initialSubTab === 'offers' || initialSubTab === 'property_offers') return 'property_offers';
+    if (role === 'tenant') return 'property_offers';
+    return 'overview';
+  });
+
+  React.useEffect(() => {
+    if (initialSubTab === 'offers' || initialSubTab === 'property_offers') {
+      setActiveSubTab('property_offers');
+    }
+  }, [initialSubTab]);
 
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [previewingProperty, setPreviewingProperty] = useState<Property | null>(null);
@@ -61,6 +80,21 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
     setDashboardNotice(msg);
     setTimeout(() => setDashboardNotice(null), 4000);
   };
+
+  // Load incoming offers count for tenant
+  const pendingOffersCount: number =
+    useLiveQuery(
+      async () => {
+        if (!currentUser) return 0;
+        return db.propertyOffers
+          .where('tenantId')
+          .equals(currentUser.id)
+          .filter(o => o.status === 'pending')
+          .count();
+      },
+      [currentUser?.id],
+      0
+    ) || 0;
 
   // Load properties
   const properties: Property[] =
@@ -268,6 +302,16 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
             <span>+ Add Property Listing</span>
           </button>
         )}
+
+        {isTenantView && !isGuest && onOpenCreatePropertyNeeded && (
+          <button
+            onClick={onOpenCreatePropertyNeeded}
+            className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold shadow-2xs transition self-start sm:self-auto cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Create Rental Property Needed</span>
+          </button>
+        )}
       </div>
 
       {/* Guest Mode Restriction Notice Banner */}
@@ -375,6 +419,29 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
 
       {/* Sub-tab Navigation */}
       <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl overflow-x-auto">
+        {/* Primary Tab for Tenant: Property Owners Offers */}
+        {isTenantView && (
+          <button
+            onClick={() => setActiveSubTab('property_offers')}
+            className={`flex-1 min-w-[170px] py-2 text-xs font-bold rounded-xl transition text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeSubTab === 'property_offers'
+                ? 'bg-teal-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 bg-white/70'
+            }`}
+          >
+            <span>Property Owners Offers</span>
+            {pendingOffersCount > 0 && (
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                  activeSubTab === 'property_offers' ? 'bg-white text-teal-800' : 'bg-teal-700 text-white animate-pulse'
+                }`}
+              >
+                {pendingOffersCount}
+              </span>
+            )}
+          </button>
+        )}
+
         <button
           onClick={() => setActiveSubTab('overview')}
           className={`flex-1 min-w-[85px] py-2 text-xs font-bold rounded-xl transition text-center cursor-pointer ${
@@ -457,6 +524,19 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
         >
           Repairs ({openMaintenance})
         </button>
+
+        {!isTenantView && (
+          <button
+            onClick={() => setActiveSubTab('property_offers')}
+            className={`flex-1 min-w-[155px] py-2 text-xs font-bold rounded-xl transition text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeSubTab === 'property_offers'
+                ? 'bg-teal-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span>Tenant Demands & Offers</span>
+          </button>
+        )}
       </div>
 
       {/* Subtab Contents */}
@@ -879,6 +959,14 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
 
       {activeSubTab === 'maintenance' && (
         <MaintenanceTracker />
+      )}
+
+      {activeSubTab === 'property_offers' && (
+        <TenantOffersSection
+          onOpenCreateNeeded={onOpenCreatePropertyNeeded || (() => {})}
+          onStartChat={(recId, recName) => onStartChat(recId, recName)}
+          highlightedOfferId={highlightedOfferId}
+        />
       )}
 
       {/* Edit Property Modal */}

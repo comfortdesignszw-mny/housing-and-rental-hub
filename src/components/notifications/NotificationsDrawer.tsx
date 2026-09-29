@@ -107,6 +107,8 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
 
   const getIcon = (type: NotificationItem['type']) => {
     switch (type) {
+      case 'property_offer':
+        return <Sparkles className="w-4 h-4 text-teal-600" />;
       case 'rent_due':
         return <DollarSign className="w-4 h-4 text-amber-600" />;
       case 'roommate_match':
@@ -124,6 +126,8 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
 
   const getTypeLabel = (type: NotificationItem['type']) => {
     switch (type) {
+      case 'property_offer':
+        return 'Property Offer';
       case 'rent_due':
         return 'Payment & Rent';
       case 'roommate_match':
@@ -405,9 +409,17 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                       handleCloseDetail();
                       onSelectAction(url);
                     }}
-                    className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                    className={`w-full py-2.5 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs ${
+                      selectedNotification.type === 'property_offer'
+                        ? 'bg-teal-700 hover:bg-teal-800'
+                        : 'bg-emerald-700 hover:bg-emerald-800'
+                    }`}
                   >
-                    <span>View in Chat / Reply</span>
+                    <span>
+                      {selectedNotification.type === 'property_offer'
+                        ? 'Open in Property Owners Offers'
+                        : 'View in Chat / Reply'}
+                    </span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 )}

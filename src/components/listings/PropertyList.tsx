@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Property, PropertyType } from '../../types';
+import { Property, PropertyType, PropertyNeeded } from '../../types';
 import { PropertyCard } from './PropertyCard';
 import { PropertyDetails } from './PropertyDetails';
 import { PropertyCompareModal } from './PropertyCompareModal';
 import { RentalApplicationModal } from './RentalApplicationModal';
+import { PropertyNeededCard } from '../tenants/PropertyNeededCard';
+import { MakePropertyOfferModal } from '../tenants/MakePropertyOfferModal';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import {
@@ -20,20 +22,27 @@ import {
   RotateCcw,
   Tag,
   Home,
+  Sparkles,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ZIMBABWE_PROVINCES, getAllCitiesAndTowns } from '../../data/zimbabweLocations';
 
 interface PropertyListProps {
   onOpenCreateListing: () => void;
+  onOpenCreatePropertyNeeded?: () => void;
   onStartChat: (recipientId: string, recipientName: string, propertyId: string) => void;
 }
 
 export const PropertyList: React.FC<PropertyListProps> = ({
   onOpenCreateListing,
+  onOpenCreatePropertyNeeded,
   onStartChat,
 }) => {
   const { role, currentUser } = useAuth();
+
+  // Demarcation State: 'available' (Owners & Agents) vs 'needed' (Tenant Requests)
+  const [mainListingMode, setMainListingMode] = useState<'available' | 'needed'>('available');
 
   // Search & Filter State
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'rental' | 'sale'>('all');
@@ -56,6 +65,10 @@ export const PropertyList: React.FC<PropertyListProps> = ({
   const [comparedProperties, setComparedProperties] = useState<Property[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
 
+  // Property Offer Modal State
+  const [selectedPropertyNeededForOffer, setSelectedPropertyNeededForOffer] = useState<PropertyNeeded | null>(null);
+  const [showMakeOfferModal, setShowMakeOfferModal] = useState(false);
+
   // Pagination / Lazy Virtualized batch size
   const [displayCount, setDisplayCount] = useState(12);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -67,6 +80,8 @@ export const PropertyList: React.FC<PropertyListProps> = ({
 
   // Live queries from local reactive IndexedDB
   const allProperties = useLiveQuery(() => db.properties.toArray(), []) || [];
+  const allPropertiesNeeded = useLiveQuery(() => db.propertiesNeeded.toArray(), []) || [];
+
   const savedListingIds = useLiveQuery(
     async () => {
       if (!currentUser) return [];
@@ -174,6 +189,67 @@ export const PropertyList: React.FC<PropertyListProps> = ({
     onlyPetFriendly,
   ]);
 
+  // Filter tenant properties needed requests
+  const filteredPropertiesNeeded = useMemo(() => {
+    return allPropertiesNeeded
+      .filter(req => req.status !== 'cancelled')
+      .filter(req => {
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchesType = req.propertyTypeNeeded?.toLowerCase().includes(q);
+          const matchesLoc = req.locationPreferred?.toLowerCase().includes(q);
+          const matchesCity = req.city?.toLowerCase().includes(q);
+          const matchesSuburb = req.suburb?.toLowerCase().includes(q);
+          const matchesTenant = req.tenantName?.toLowerCase().includes(q);
+          const matchesDesc = req.description?.toLowerCase().includes(q);
+          if (!matchesType && !matchesLoc && !matchesCity && !matchesSuburb && !matchesTenant && !matchesDesc) {
+            return false;
+          }
+        }
+
+        if (selectedCity !== 'All' && req.city?.toLowerCase() !== selectedCity.toLowerCase()) {
+          return false;
+        }
+
+        if (selectedType !== 'All' && !req.propertyTypeNeeded?.toLowerCase().includes(selectedType.toLowerCase())) {
+          return false;
+        }
+
+        if (maxRent < 1000 && req.budgetUsd > maxRent) {
+          return false;
+        }
+
+        if (onlySolar && !req.amenitiesPreferred?.some(a => a.toLowerCase().includes('solar'))) {
+          return false;
+        }
+
+        if (onlyBorehole && !req.amenitiesPreferred?.some(a => a.toLowerCase().includes('borehole'))) {
+          return false;
+        }
+
+        if (onlyWifi && !req.amenitiesPreferred?.some(a => a.toLowerCase().includes('wifi'))) {
+          return false;
+        }
+
+        if (onlyPetFriendly && !req.amenitiesPreferred?.some(a => a.toLowerCase().includes('pet'))) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [
+    allPropertiesNeeded,
+    searchQuery,
+    selectedCity,
+    selectedType,
+    maxRent,
+    onlySolar,
+    onlyBorehole,
+    onlyWifi,
+    onlyPetFriendly,
+  ]);
+
   const visibleProperties = filteredProperties.slice(0, displayCount);
 
   const toggleCompare = (p: Property) => {
@@ -246,63 +322,174 @@ export const PropertyList: React.FC<PropertyListProps> = ({
 
       {/* Search & Action Bar */}
       <div className="space-y-3">
-        {/* Listing Category Selector: All vs Rentals vs Properties for Sale (Requirement 2) */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-2xl w-full sm:w-auto self-start">
-          <button
-            type="button"
-            onClick={() => setCategoryFilter('all')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-              categoryFilter === 'all'
-                ? 'bg-white text-slate-900 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span>All Listings</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-semibold">
-              {allProperties.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setCategoryFilter('rental')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-              categoryFilter === 'rental'
-                ? 'bg-emerald-700 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Home className="w-3.5 h-3.5" />
-            <span>Rentals</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                categoryFilter === 'rental' ? 'bg-emerald-800 text-white' : 'bg-slate-100 text-slate-700'
+        {/* Main Mode Demarcation: Properties Available vs Properties Needed */}
+        <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 border border-slate-200 shadow-2xs">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setMainListingMode('available')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
+                mainListingMode === 'available'
+                  ? 'bg-white text-emerald-900 shadow-xs border border-emerald-200/80 ring-1 ring-emerald-500/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              {allProperties.filter(p => !p.listingCategory || p.listingCategory === 'rental').length}
-            </span>
-          </button>
+              <Building className="w-4 h-4 text-emerald-700" />
+              <span>Properties Available</span>
+              <span
+                className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                  mainListingMode === 'available'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {allProperties.length}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setCategoryFilter('sale')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-              categoryFilter === 'sale'
-                ? 'bg-amber-600 text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Tag className="w-3.5 h-3.5" />
-            <span>Properties for Sale</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                categoryFilter === 'sale' ? 'bg-amber-700 text-white' : 'bg-slate-100 text-slate-700'
+            <button
+              type="button"
+              onClick={() => setMainListingMode('needed')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
+                mainListingMode === 'needed'
+                  ? 'bg-white text-teal-900 shadow-xs border border-teal-200/80 ring-1 ring-teal-500/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              {allProperties.filter(p => p.listingCategory === 'sale').length}
-            </span>
-          </button>
+              <Sparkles className="w-4 h-4 text-teal-600" />
+              <span>Properties Needed</span>
+              <span
+                className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                  mainListingMode === 'needed'
+                    ? 'bg-teal-100 text-teal-800'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {allPropertiesNeeded.filter(r => r.status !== 'cancelled').length}
+              </span>
+              <span className="hidden md:inline text-[10px] text-teal-700 font-semibold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200/50">
+                Tenant Requests
+              </span>
+            </button>
+          </div>
+
+          {/* Quick Create Action depending on mode */}
+          <div className="flex items-center justify-end">
+            {mainListingMode === 'available' ? (
+              (role === 'landlord' || role === 'property_manager' || role === 'agent' || role === 'admin') && (
+                <button
+                  type="button"
+                  onClick={onOpenCreateListing}
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add Property Listing</span>
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenCreatePropertyNeeded}
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Create Rental Property Needed</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* When Available is active: Show Category selector (Rentals vs Sale) */}
+        {mainListingMode === 'available' && (
+          <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-2xl w-full sm:w-auto self-start">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                categoryFilter === 'all'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>All Available</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-semibold">
+                {allProperties.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('rental')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                categoryFilter === 'rental'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Home className="w-3.5 h-3.5" />
+              <span>For Rent</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  categoryFilter === 'rental'
+                    ? 'bg-emerald-800 text-white'
+                    : 'bg-slate-100 text-slate-700'
+                }`}
+              >
+                {allProperties.filter(p => !p.listingCategory || p.listingCategory === 'rental').length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('sale')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                categoryFilter === 'sale'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Tag className="w-3.5 h-3.5" />
+              <span>Properties for Sale</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  categoryFilter === 'sale'
+                    ? 'bg-amber-700 text-white'
+                    : 'bg-slate-100 text-slate-700'
+                }`}
+              >
+                {allProperties.filter(p => p.listingCategory === 'sale').length}
+              </span>
+            </button>
+          </div>
+        )}
+
+        {/* When Needed is active: Show Sub-Banner */}
+        {mainListingMode === 'needed' && (
+          <div className="p-3 bg-gradient-to-r from-teal-50 to-emerald-50 rounded-2xl border border-teal-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-teal-100 text-teal-800 shrink-0">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-teal-950">
+                  Tenant Rental Demands & Accommodation Requests
+                </h4>
+                <p className="text-teal-800 text-[11px] leading-tight">
+                  Tenants post their exact rental needs, preferred locations, and budget. Landlords, owners & agents: click <strong>"Make an Offer"</strong> on any request to send your available properties.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenCreatePropertyNeeded}
+              className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs transition shadow-2xs cursor-pointer self-start sm:self-auto shrink-0 flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Post Your Rental Need</span>
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           {/* Search Input */}
@@ -310,7 +497,11 @@ export const PropertyList: React.FC<PropertyListProps> = ({
             <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search suburb (Avondale, Hillside...), city, or features..."
+              placeholder={
+                mainListingMode === 'available'
+                  ? 'Search suburb (Avondale, Hillside...), city, or features...'
+                  : 'Search tenant requests: "1 room", "2 bedroom flat", suburb, or budget...'
+              }
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-2xs outline-hidden"
@@ -343,156 +534,184 @@ export const PropertyList: React.FC<PropertyListProps> = ({
             )}
           </button>
 
-          {/* Add Listing Button for Landlords, Property Managers, Agents & Admins */}
-          {(role === 'landlord' || role === 'property_manager' || role === 'agent' || role === 'admin') && (
+          {/* Add Listing Button for Landlords, Property Managers, Agents & Admins (Mobile shortcut) */}
+          {mainListingMode === 'available' &&
+            (role === 'landlord' || role === 'property_manager' || role === 'agent' || role === 'admin') && (
+              <button
+                onClick={onOpenCreateListing}
+                className="flex md:hidden items-center justify-center p-2 rounded-xl bg-emerald-700 text-white shadow-2xs hover:bg-emerald-800 transition"
+                title="Add Listing"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
+
+          {mainListingMode === 'needed' && (
             <button
-              onClick={onOpenCreateListing}
-              className="flex md:hidden items-center justify-center p-2 rounded-xl bg-emerald-700 text-white shadow-2xs hover:bg-emerald-800 transition"
-              title="Add Listing"
+              onClick={onOpenCreatePropertyNeeded}
+              className="flex md:hidden items-center justify-center p-2 rounded-xl bg-teal-700 text-white shadow-2xs hover:bg-teal-800 transition"
+              title="Post Property Needed"
             >
               <Plus className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Quick Filter Pills Row */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {/* Saved toggle */}
-          <button
-            onClick={() => setOnlySaved(!onlySaved)}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition ${
-              onlySaved
-                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Heart className={`w-3 h-3 ${onlySaved ? 'fill-current' : ''}`} />
-            <span>Saved ({savedListingIds.length})</span>
-          </button>
+        {/* Results Header */}
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-xs text-slate-500 font-medium">
+            {mainListingMode === 'available' ? (
+              <>
+                Showing <span className="font-bold text-slate-800">{filteredProperties.length}</span>{' '}
+                {categoryFilter === 'sale'
+                  ? 'properties for sale'
+                  : categoryFilter === 'rental'
+                  ? 'rental listings'
+                  : 'available properties'}
+              </>
+            ) : (
+              <>
+                Showing <span className="font-bold text-teal-900">{filteredPropertiesNeeded.length}</span>{' '}
+                tenant accommodation requests
+              </>
+            )}
+          </p>
 
-          {/* Solar quick pill */}
-          <button
-            onClick={() => setOnlySolar(!onlySolar)}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition ${
-              onlySolar
-                ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Sun className="w-3 h-3 text-amber-600" />
-            <span>Solar Backup</span>
-          </button>
-
-          {/* Borehole quick pill */}
-          <button
-            onClick={() => setOnlyBorehole(!onlyBorehole)}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition ${
-              onlyBorehole
-                ? 'bg-sky-100 text-sky-900 border border-sky-300'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Droplet className="w-3 h-3 text-sky-600" />
-            <span>Borehole Water</span>
-          </button>
-
-          {/* Quick city pills */}
-          <div className="h-4 w-px bg-slate-300 mx-1 shrink-0" />
-          {quickCities.map(city => (
+          {activeFiltersCount > 0 && (
             <button
-              key={city}
-              onClick={() => setSelectedCity(city)}
-              className={`px-3 py-1 rounded-full text-xs font-medium shrink-0 transition ${
-                selectedCity === city
-                  ? 'bg-slate-900 text-white font-semibold'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
+              onClick={handleResetFilters}
+              className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
             >
-              {city}
+              <RotateCcw className="w-3 h-3" />
+              Reset Filters
             </button>
-          ))}
+          )}
         </div>
       </div>
 
-      {/* Results Header */}
-      <div className="flex items-center justify-between pt-1">
-        <p className="text-xs text-slate-500 font-medium">
-          Showing <span className="font-bold text-slate-800">{filteredProperties.length}</span> Zimbabwe accommodation listings
-        </p>
-
-        {activeFiltersCount > 0 && (
-          <button
-            onClick={handleResetFilters}
-            className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800"
-          >
-            <RotateCcw className="w-3 h-3" />
-            Reset Filters
-          </button>
-        )}
-      </div>
-
-      {/* Virtualized / Batched Listings Grid */}
-      {allProperties.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-3 shadow-2xs">
-          <Building className="w-12 h-12 text-emerald-600/60 mx-auto" />
-          <h3 className="font-extrabold text-slate-900 text-sm">Clean Database Ready for Industry Data</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            All sample data has been cleared. Real landlords, agents, and property managers can add verified property listings to the persistent cloud database.
-          </p>
-          {(role === 'landlord' || role === 'property_manager' || role === 'admin') ? (
-            <button
-              onClick={onOpenCreateListing}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 transition cursor-pointer shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Publish First Property Listing</span>
-            </button>
+      {/* MODE 1: PROPERTIES AVAILABLE GRID */}
+      {mainListingMode === 'available' && (
+        <>
+          {allProperties.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-3 shadow-2xs">
+              <Building className="w-12 h-12 text-emerald-600/60 mx-auto" />
+              <h3 className="font-extrabold text-slate-900 text-sm">Clean Database Ready for Industry Data</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                All sample data has been cleared. Real landlords, agents, and property managers can add verified property listings to the persistent cloud database.
+              </p>
+              {(role === 'landlord' || role === 'property_manager' || role === 'admin') ? (
+                <button
+                  onClick={onOpenCreateListing}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 transition cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Publish First Property Listing</span>
+                </button>
+              ) : (
+                <p className="text-[11px] text-emerald-700 font-medium">
+                  Sign in as a Landlord or Administrator to publish real properties.
+                </p>
+              )}
+            </div>
+          ) : visibleProperties.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
+              <Building className="w-10 h-10 text-slate-300 mx-auto" />
+              <h3 className="font-bold text-slate-900 text-sm">No properties match your filters</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Try adjusting your search criteria, widening the price budget, or resetting filters.
+              </p>
+              <button
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+              >
+                Show All Listings
+              </button>
+            </div>
           ) : (
-            <p className="text-[11px] text-emerald-700 font-medium">
-              Sign in as a Landlord or Administrator to publish real properties.
-            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visibleProperties.map(property => (
+                <PropertyCard
+                  key={property.id}
+                  property={property}
+                  onSelect={p => setSelectedProperty(p)}
+                  onApply={p => setApplyingProperty(p)}
+                  onMessageOwner={p => onStartChat(p.landlordId, p.landlordName, p.id)}
+                  onToggleCompare={toggleCompare}
+                  isCompared={comparedProperties.some(c => c.id === property.id)}
+                />
+              ))}
+            </div>
           )}
-        </div>
-      ) : visibleProperties.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
-          <Building className="w-10 h-10 text-slate-300 mx-auto" />
-          <h3 className="font-bold text-slate-900 text-sm">No properties match your filters</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Try adjusting your search criteria, widening the price budget, or resetting filters.
-          </p>
-          <button
-            onClick={handleResetFilters}
-            className="inline-flex items-center gap-1 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 cursor-pointer"
-          >
-            Show All Listings
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleProperties.map(property => (
-            <PropertyCard
-              key={property.id}
-              property={property}
-              onSelect={p => setSelectedProperty(p)}
-              onApply={p => setApplyingProperty(p)}
-              onMessageOwner={p => onStartChat(p.landlordId, p.landlordName, p.id)}
-              onToggleCompare={toggleCompare}
-              isCompared={comparedProperties.some(c => c.id === property.id)}
-            />
-          ))}
-        </div>
+
+          {/* Infinite load more button if long list */}
+          {visibleProperties.length < filteredProperties.length && (
+            <div className="text-center pt-4">
+              <button
+                onClick={() => setDisplayCount(prev => prev + 12)}
+                className="px-6 py-2.5 bg-white border border-slate-300 text-slate-800 font-semibold text-xs rounded-xl shadow-2xs hover:bg-slate-50 transition cursor-pointer"
+              >
+                Load More Listings ({filteredProperties.length - visibleProperties.length} remaining)
+              </button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Infinite load more button if long list */}
-      {visibleProperties.length < filteredProperties.length && (
-        <div className="text-center pt-4">
-          <button
-            onClick={() => setDisplayCount(prev => prev + 12)}
-            className="px-6 py-2.5 bg-white border border-slate-300 text-slate-800 font-semibold text-xs rounded-xl shadow-2xs hover:bg-slate-50 transition"
-          >
-            Load More Listings ({filteredProperties.length - visibleProperties.length} remaining)
-          </button>
-        </div>
+      {/* MODE 2: PROPERTIES NEEDED GRID (TENANT REQUESTS) */}
+      {mainListingMode === 'needed' && (
+        <>
+          {filteredPropertiesNeeded.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-teal-200 p-10 text-center space-y-3 shadow-2xs">
+              <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center mx-auto">
+                <Sparkles className="w-7 h-7" />
+              </div>
+              <h3 className="font-extrabold text-slate-900 text-base">
+                No accommodation requests match your search
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Are you looking for accommodation anywhere in Zimbabwe? Post your required room type, preferred location, and budget. Landlords and verified agents will review your request and send you direct offers.
+              </p>
+              <button
+                type="button"
+                onClick={onOpenCreatePropertyNeeded}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Create Rental Property Needed</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPropertiesNeeded.map(item => (
+                <PropertyNeededCard
+                  key={item.id}
+                  propertyNeeded={item}
+                  onMakeOffer={req => {
+                    setSelectedPropertyNeededForOffer(req);
+                    setShowMakeOfferModal(true);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Make an Offer Modal for Landlords, Owners & Agents */}
+      {showMakeOfferModal && selectedPropertyNeededForOffer && (
+        <MakePropertyOfferModal
+          propertyNeeded={selectedPropertyNeededForOffer}
+          isOpen={showMakeOfferModal}
+          onClose={() => {
+            setShowMakeOfferModal(false);
+            setSelectedPropertyNeededForOffer(null);
+          }}
+          onOfferSent={() => {
+            showToast(`Offer successfully dispatched to ${selectedPropertyNeededForOffer.tenantName}! In-app notification sent.`);
+            setShowMakeOfferModal(false);
+            setSelectedPropertyNeededForOffer(null);
+          }}
+        />
       )}
 
       {/* Floating Compare Bar if items selected */}
