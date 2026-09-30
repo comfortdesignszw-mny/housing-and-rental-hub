@@ -21,7 +21,12 @@ import {
   Plus,
   Trash2,
   Check,
+  Edit3,
+  Share2,
+  Eye,
 } from 'lucide-react';
+import { EditPropertyNeededModal } from './EditPropertyNeededModal';
+import { ShareModal } from '../common/ShareModal';
 
 interface TenantOffersSectionProps {
   onOpenCreateNeeded: () => void;
@@ -38,6 +43,8 @@ export const TenantOffersSection: React.FC<TenantOffersSectionProps> = ({
   const [activeTab, setActiveTab] = useState<'offers' | 'my_requests'>('offers');
   const [offerFilter, setOfferFilter] = useState<'all' | 'pending' | 'accepted' | 'declined'>('all');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [editingPropertyNeeded, setEditingPropertyNeeded] = useState<PropertyNeeded | null>(null);
+  const [sharingPropertyNeeded, setSharingPropertyNeeded] = useState<PropertyNeeded | null>(null);
 
   const showNotice = (msg: string) => {
     setActionNotice(msg);
@@ -109,13 +116,24 @@ export const TenantOffersSection: React.FC<TenantOffersSectionProps> = ({
   };
 
   const handleToggleRequestFulfilled = async (req: PropertyNeeded) => {
-    const nextStatus = req.status === 'fulfilled' ? 'active' : 'fulfilled';
+    const isNowFound = req.status !== 'found';
+    const nextStatus = isNowFound ? 'found' : 'active';
+    const updatedFoundAt = isNowFound ? Date.now() : undefined;
+    const now = Date.now();
     try {
-      await db.propertiesNeeded.update(req.id, { status: nextStatus, updatedAt: Date.now() });
-      await updateDoc(doc(firestoreDb, 'propertiesNeeded', req.id), { status: nextStatus, updatedAt: Date.now() });
+      await db.propertiesNeeded.update(req.id, {
+        status: nextStatus as any,
+        foundAt: updatedFoundAt,
+        updatedAt: now,
+      });
+      await updateDoc(doc(firestoreDb, 'propertiesNeeded', req.id), {
+        status: nextStatus,
+        foundAt: updatedFoundAt || null,
+        updatedAt: now,
+      });
       showNotice(
-        nextStatus === 'fulfilled'
-          ? 'Request marked as Fulfilled / Accommodation Found!'
+        isNowFound
+          ? 'Request marked as Found! Listing displays badge and will automatically disappear after 24 hours.'
           : 'Request re-activated in public listings.'
       );
     } catch (e) {
@@ -486,73 +504,125 @@ export const TenantOffersSection: React.FC<TenantOffersSectionProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {myRequests.map(req => (
-                <div
-                  key={req.id}
-                  className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          req.status === 'fulfilled'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-teal-100 text-teal-800'
-                        }`}
-                      >
-                        {req.status === 'fulfilled' ? 'Fulfilled / Found' : 'Active in Listings'}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        Posted {new Date(req.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                      </span>
+              {myRequests.map(req => {
+                const isFound = req.status === 'found' || req.status === 'fulfilled';
+                const foundTimestamp = req.foundAt || req.updatedAt || req.createdAt;
+                const elapsed = Date.now() - foundTimestamp;
+                const remainingMs = 24 * 60 * 60 * 1000 - elapsed;
+                const remainingHours = Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60)));
+
+                return (
+                  <div
+                    key={req.id}
+                    className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        {isFound ? (
+                          <span className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 uppercase">
+                            <CheckCircle2 className="w-3 h-3 text-white" />
+                            <span>Property Found 🎉 • Disappears in {remainingHours}h</span>
+                          </span>
+                        ) : (
+                          <span className="bg-teal-100 text-teal-800 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase border border-teal-200">
+                            Active in Listings
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          Posted {new Date(req.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+
+                      <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                        {req.propertyTypeNeeded} in {req.locationPreferred}
+                      </h4>
+
+                      <p className="text-xs text-slate-600">
+                        Budget: <strong className="text-emerald-700">${req.budgetUsd}/mo</strong> • Move-in:{' '}
+                        {req.availabilityDate} • Offers received:{' '}
+                        <strong className="text-teal-800 font-bold">{req.offersCount || 0}</strong>
+                        {req.views !== undefined && (
+                          <span className="ml-2 text-slate-400">
+                            • {req.views || 0} views
+                          </span>
+                        )}
+                      </p>
+
+                      {req.description && (
+                        <p className="text-xs text-slate-500 italic line-clamp-1">
+                          "{req.description}"
+                        </p>
+                      )}
                     </div>
 
-                    <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">
-                      {req.propertyTypeNeeded} in {req.locationPreferred}
-                    </h4>
+                    <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRequestFulfilled(req)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer border ${
+                          isFound
+                            ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                            : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
+                        }`}
+                        title={isFound ? 'Re-activate request' : 'Mark as found (disappears after 24 hours)'}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{isFound ? 'Re-activate' : 'Mark Found 🎉'}</span>
+                      </button>
 
-                    <p className="text-xs text-slate-600">
-                      Budget: <strong className="text-emerald-700">${req.budgetUsd}/mo</strong> • Move-in:{' '}
-                      {req.availabilityDate} • Offers received:{' '}
-                      <strong className="text-teal-800 font-bold">{req.offersCount || 0}</strong>
-                    </p>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPropertyNeeded(req)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition flex items-center gap-1 cursor-pointer"
+                        title="Edit request"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Edit</span>
+                      </button>
 
-                    {req.description && (
-                      <p className="text-xs text-slate-500 italic line-clamp-1">
-                        "{req.description}"
-                      </p>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setSharingPropertyNeeded(req)}
+                        className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                        title="Share request"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRequest(req)}
+                        className="p-2 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition cursor-pointer"
+                        title="Delete request"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRequestFulfilled(req)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer border ${
-                        req.status === 'fulfilled'
-                          ? 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                          : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                      }`}
-                      title={req.status === 'fulfilled' ? 'Re-activate request' : 'Mark as found'}
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>{req.status === 'fulfilled' ? 'Re-activate' : 'Mark Found'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteRequest(req)}
-                      className="p-2 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition cursor-pointer"
-                      title="Delete request"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
+      )}
+
+      {/* Edit Property Needed Modal */}
+      {editingPropertyNeeded && (
+        <EditPropertyNeededModal
+          isOpen={!!editingPropertyNeeded}
+          propertyNeeded={editingPropertyNeeded}
+          onClose={() => setEditingPropertyNeeded(null)}
+          onUpdated={() => showNotice('Accommodation request updated successfully!')}
+        />
+      )}
+
+      {/* Social Share Modal */}
+      {sharingPropertyNeeded && (
+        <ShareModal
+          isOpen={!!sharingPropertyNeeded}
+          propertyNeeded={sharingPropertyNeeded}
+          onClose={() => setSharingPropertyNeeded(null)}
+        />
       )}
     </div>
   );

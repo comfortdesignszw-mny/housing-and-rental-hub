@@ -201,6 +201,59 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   };
 
+  const handleTogglePropertyNeededFound = async (item: PropertyNeeded) => {
+    const isNowFound = item.status !== 'found';
+    const nextStatus = isNowFound ? 'found' : 'active';
+    const updatedFoundAt = isNowFound ? Date.now() : undefined;
+    const now = Date.now();
+
+    try {
+      await db.propertiesNeeded.update(item.id, {
+        status: nextStatus as any,
+        foundAt: updatedFoundAt,
+        updatedAt: now,
+      });
+
+      try {
+        await updateDoc(doc(firestoreDb, 'propertiesNeeded', item.id), {
+          status: nextStatus,
+          foundAt: updatedFoundAt || null,
+          updatedAt: now,
+        });
+      } catch (fErr) {
+        console.warn('Could not sync found status to Firestore:', fErr);
+      }
+
+      showToast(
+        isNowFound
+          ? 'Marked as Found! Listing shows "Property Found" badge, disables offers, and automatically disappears after 24 hours.'
+          : 'Re-activated in public listings! Offers can now be received.'
+      );
+    } catch (err) {
+      console.error('Error toggling found status:', err);
+      showToast('Error updating status.');
+    }
+  };
+
+  const handleDeletePropertyNeeded = async (item: PropertyNeeded) => {
+    if (!window.confirm(`Are you sure you want to delete your accommodation request for "${item.propertyTypeNeeded}"?`)) {
+      return;
+    }
+
+    try {
+      await db.propertiesNeeded.delete(item.id);
+      try {
+        await deleteDoc(doc(firestoreDb, 'propertiesNeeded', item.id));
+      } catch (fErr) {
+        console.warn('Could not delete request from Firestore:', fErr);
+      }
+      showToast('Accommodation request deleted successfully.');
+    } catch (err) {
+      console.error('Error deleting property needed:', err);
+      showToast('Error deleting request.');
+    }
+  };
+
   const handleClearCache = async () => {
     if (confirm('Clear local offline IndexedDB cache? Real data will re-sync from Firestore on connection.')) {
       await clearLocalCache();
@@ -384,8 +437,291 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         </p>
       </div>
 
+      {/* Profile Section Navigation Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setActiveProfileTab('profile')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0 ${
+            activeProfileTab === 'profile'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <UserCheck className="w-3.5 h-3.5" />
+          <span>Profile Overview</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveProfileTab('needed_properties')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0 ${
+            activeProfileTab === 'needed_properties'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-teal-800 hover:bg-teal-50'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-teal-500" />
+          <span>Manage Needed Properties</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeProfileTab === 'needed_properties'
+                ? 'bg-white text-teal-800'
+                : 'bg-teal-100 text-teal-800'
+            }`}
+          >
+            {myPropertiesNeeded.length}
+          </span>
+        </button>
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveProfileTab('admin')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0 ${
+              activeProfileTab === 'admin'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'bg-white border border-slate-200 text-amber-800 hover:bg-amber-50'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Admin Users & RBAC</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setActiveProfileTab('db')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0 ${
+            activeProfileTab === 'db'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Database className="w-3.5 h-3.5" />
+          <span>Cloud & Cache</span>
+        </button>
+      </div>
+
+      {/* TAB 1: PROFILE OVERVIEW */}
+      {activeProfileTab === 'profile' && (
+        <div className="space-y-4">
+          {/* Quick shortcut to Manage Needed Properties for Tenants */}
+          {(role === 'tenant' || role === 'admin') && (
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 rounded-2xl border border-teal-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-teal-100 text-teal-800 rounded-xl shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-teal-950 text-sm">
+                    Manage Your Needed Properties ({myPropertiesNeeded.length} Active)
+                  </h4>
+                  <p className="text-xs text-teal-800 leading-tight">
+                    Edit accommodation requests, toggle "Property Found" (with 24h automatic disappearing countdown), or review offers.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveProfileTab('needed_properties')}
+                  className="px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  Manage Needed Properties
+                </button>
+                {onOpenCreatePropertyNeeded && (
+                  <button
+                    type="button"
+                    onClick={onOpenCreatePropertyNeeded}
+                    className="p-2 bg-white border border-teal-300 hover:bg-teal-50 text-teal-800 rounded-xl text-xs font-bold transition cursor-pointer"
+                    title="Post New Rental Need"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: MANAGE NEEDED PROPERTIES (CRUD MANAGEMENT FOR TENANT ACCOUNT) */}
+      {activeProfileTab === 'needed_properties' && (
+        <div className="bg-white rounded-2xl border border-teal-200/90 p-5 shadow-2xs space-y-4 animate-in fade-in duration-150">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-teal-100 pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-teal-100 text-teal-800">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Manage Needed Properties
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                Update your accommodation requests, manage budget & locations, toggle "Property Found" status (with 24h automatic disappearance), or delete listings.
+              </p>
+            </div>
+
+            {onOpenCreatePropertyNeeded && (
+              <button
+                type="button"
+                onClick={onOpenCreatePropertyNeeded}
+                className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 active:scale-98 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Post Rental Need</span>
+              </button>
+            )}
+          </div>
+
+          {/* List of Requests */}
+          {myPropertiesNeeded.length === 0 ? (
+            <div className="py-12 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center mx-auto">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h4 className="font-extrabold text-slate-800 text-sm">
+                No accommodation requests published yet
+              </h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Need accommodation in Harare, Bulawayo, or anywhere in Zimbabwe? Post your room requirements, location, and monthly budget to receive direct offers from verified landlords and agents.
+              </p>
+              {onOpenCreatePropertyNeeded && (
+                <button
+                  type="button"
+                  onClick={onOpenCreatePropertyNeeded}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Post Your Rental Need</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myPropertiesNeeded.map(req => {
+                const isFound = req.status === 'found' || req.status === 'fulfilled';
+                const foundTimestamp = req.foundAt || req.updatedAt || req.createdAt;
+                const elapsed = Date.now() - foundTimestamp;
+                const remainingMs = 24 * 60 * 60 * 1000 - elapsed;
+                const remainingHours = Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60)));
+
+                return (
+                  <div
+                    key={req.id}
+                    className="p-4 rounded-xl border border-slate-200 hover:border-teal-300 transition bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isFound ? (
+                          <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 uppercase">
+                            <CheckCircle2 className="w-3 h-3 text-white" />
+                            <span>Property Found 🎉 • Disappears in {remainingHours}h</span>
+                          </span>
+                        ) : (
+                          <span className="bg-teal-100 text-teal-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase border border-teal-200">
+                            Active in Listings
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-400">
+                          Posted {new Date(req.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+
+                      <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                        {req.propertyTypeNeeded} in {req.locationPreferred}
+                      </h4>
+
+                      <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
+                        <span>
+                          Budget: <strong className="text-emerald-700 font-black">${req.budgetUsd}/mo</strong>
+                        </span>
+                        <span>•</span>
+                        <span>Move-in: <strong>{req.availabilityDate}</strong></span>
+                        <span>•</span>
+                        <span>Offers: <strong className="text-teal-800 font-bold">{req.offersCount || 0}</strong></span>
+                        <span>•</span>
+                        <span className="flex items-center gap-0.5">
+                          <Eye className="w-3 h-3 text-slate-400" />
+                          <span>{req.views || 0} views</span>
+                        </span>
+                      </div>
+
+                      {req.amenitiesPreferred && req.amenitiesPreferred.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {req.amenitiesPreferred.slice(0, 4).map(a => (
+                            <span
+                              key={a}
+                              className="text-[10px] bg-white border border-slate-200 text-slate-700 px-1.5 py-0.2 rounded"
+                            >
+                              {a}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions: Status Toggle, Edit, Share, Delete */}
+                    <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto flex-wrap">
+                      {/* Status Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePropertyNeededFound(req)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer border ${
+                          isFound
+                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                            : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600 shadow-2xs'
+                        }`}
+                        title={isFound ? 'Re-activate request' : 'Mark as found (disappears after 24 hours)'}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{isFound ? 'Re-activate' : 'Mark Found 🎉'}</span>
+                      </button>
+
+                      {/* Edit Button */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingPropertyNeeded(req)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition flex items-center gap-1 cursor-pointer"
+                        title="Edit accommodation request"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Edit</span>
+                      </button>
+
+                      {/* Share Button */}
+                      <button
+                        type="button"
+                        onClick={() => setSharingPropertyNeeded(req)}
+                        className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                        title="Share request to social media"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePropertyNeeded(req)}
+                        className="p-2 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition cursor-pointer"
+                        title="Delete request"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* SECTION VISIBILITY GUARD: Only Admin sees the Registered Users and Roles Directory */}
-      {isAdmin && (
+      {isAdmin && (activeProfileTab === 'admin' || activeProfileTab === 'profile') && (
         <div className="bg-white rounded-2xl border-2 border-amber-300 p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-100 pb-3">
             <div className="flex items-center gap-2">
@@ -531,74 +867,95 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       )}
 
       {/* Offline Database Storage & Scalability Metrics */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-emerald-700" />
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-900">
-                Firestore Cloud Persistence & Local IndexedDB Cache
-              </h3>
-              <p className="text-xs text-slate-500">
-                Scalable cloud database with horizontal load balancing and high-speed local offline caching.
-              </p>
+      {(activeProfileTab === 'db' || activeProfileTab === 'profile') && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Database className="w-5 h-5 text-emerald-700" />
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  Firestore Cloud Persistence & Local IndexedDB Cache
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Scalable cloud database with horizontal load balancing and high-speed local offline caching.
+                </p>
+              </div>
             </div>
           </div>
+
+          {/* Database Metric Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                Properties
+              </span>
+              <span className="text-base font-extrabold text-slate-900">
+                {propCount}
+              </span>
+              <span className="text-[10px] text-slate-500 block">Listings cached</span>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                Applications
+              </span>
+              <span className="text-base font-extrabold text-slate-900">
+                {appCount}
+              </span>
+              <span className="text-[10px] text-slate-500 block">Rental dossiers</span>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                Roommates
+              </span>
+              <span className="text-base font-extrabold text-slate-900">
+                {roommateCount}
+              </span>
+              <span className="text-[10px] text-slate-500 block">Matching profiles</span>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">
+                Tenants & Leases
+              </span>
+              <span className="text-base font-extrabold text-slate-900">
+                {tenantCount}
+              </span>
+              <span className="text-[10px] text-slate-500 block">Tenancies managed</span>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
+            <button
+              type="button"
+              onClick={handleClearCache}
+              className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition cursor-pointer"
+            >
+              Clear Local Cache
+            </button>
+          </div>
         </div>
+      )}
 
-        {/* Database Metric Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">
-              Properties
-            </span>
-            <span className="text-base font-extrabold text-slate-900">
-              {propCount}
-            </span>
-            <span className="text-[10px] text-slate-500 block">Listings cached</span>
-          </div>
+      {/* Edit Property Needed Modal */}
+      {editingPropertyNeeded && (
+        <EditPropertyNeededModal
+          isOpen={!!editingPropertyNeeded}
+          propertyNeeded={editingPropertyNeeded}
+          onClose={() => setEditingPropertyNeeded(null)}
+          onUpdated={() => showToast('Accommodation request updated successfully!')}
+        />
+      )}
 
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">
-              Applications
-            </span>
-            <span className="text-base font-extrabold text-slate-900">
-              {appCount}
-            </span>
-            <span className="text-[10px] text-slate-500 block">Rental dossiers</span>
-          </div>
-
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">
-              Roommates
-            </span>
-            <span className="text-base font-extrabold text-slate-900">
-              {roommateCount}
-            </span>
-            <span className="text-[10px] text-slate-500 block">Matching profiles</span>
-          </div>
-
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">
-              Tenants & Leases
-            </span>
-            <span className="text-base font-extrabold text-slate-900">
-              {tenantCount}
-            </span>
-            <span className="text-[10px] text-slate-500 block">Tenancies managed</span>
-          </div>
-        </div>
-
-        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
-          <button
-            type="button"
-            onClick={handleClearCache}
-            className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-medium transition cursor-pointer"
-          >
-            Clear Local Cache
-          </button>
-        </div>
-      </div>
+      {/* Social Platform Share Modal for Property Needed */}
+      {sharingPropertyNeeded && (
+        <ShareModal
+          isOpen={!!sharingPropertyNeeded}
+          propertyNeeded={sharingPropertyNeeded}
+          onClose={() => setSharingPropertyNeeded(null)}
+        />
+      )}
 
       {/* Edit Profile Details Modal */}
       {showEditProfileModal && (
