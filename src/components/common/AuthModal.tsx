@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { X, Lock, Mail, User, Phone, Building2, Home, Users, ArrowRight, Briefcase } from 'lucide-react';
 import { UserRole } from '../../types';
 import { phoneToVirtualEmail } from '../../utils/phoneAuth';
+import { TermsOfServiceModal } from '../legal/TermsOfServiceModal';
+import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -24,6 +26,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
   const [role, setRole] = useState<'tenant' | 'landlord' | 'property_manager' | 'agent'>('tenant');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   if (!isOpen) return null;
 
@@ -454,6 +458,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
               </div>
             </div>
 
+            {/* Terms of Service & Privacy Policy Notice before sign up / login */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 text-center leading-relaxed">
+              <span>By {mode === 'signup' ? 'creating an account' : 'signing in'}, you agree to our </span>
+              <button
+                type="button"
+                onClick={() => setShowTerms(true)}
+                className="font-bold text-emerald-700 underline hover:text-emerald-900 cursor-pointer"
+              >
+                Terms of Service
+              </button>
+              <span> and </span>
+              <button
+                type="button"
+                onClick={() => setShowPrivacy(true)}
+                className="font-bold text-emerald-700 underline hover:text-emerald-900 cursor-pointer"
+              >
+                Privacy Policy
+              </button>
+              <span>.</span>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -506,6 +531,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
           </button>
         </div>
       </div>
+
+      {/* Terms of Service Modal */}
+      {showTerms && (
+        <TermsOfServiceModal
+          isOpen={showTerms}
+          onClose={() => setShowTerms(false)}
+        />
+      )}
+
+      {/* Privacy Policy Modal */}
+      {showPrivacy && (
+        <PrivacyPolicyModal
+          isOpen={showPrivacy}
+          onClose={() => setShowPrivacy(false)}
+        />
+      )}
     </div>
   );
 };

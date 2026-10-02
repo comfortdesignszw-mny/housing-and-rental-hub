@@ -19,6 +19,10 @@ import {
   LogIn,
   AlertCircle,
   Download,
+  Upload,
+  HardDrive,
+  LogOut,
+  AlertTriangle,
   Sparkles,
   Clock,
   Building2,
@@ -35,6 +39,14 @@ import { db as firestoreDb } from '../../db/firebase';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { EditPropertyNeededModal } from '../tenants/EditPropertyNeededModal';
 import { ShareModal } from '../common/ShareModal';
+import { DeleteAccountModal } from './DeleteAccountModal';
+import { RestoreAccountModal } from './RestoreAccountModal';
+import {
+  exportAccountData,
+  downloadAccountDataFile,
+  wipeAccountAndData,
+  RestoreResult,
+} from '../../services/accountDataService';
 
 interface UserProfileProps {
   onOpenAuthModal?: () => void;
@@ -101,6 +113,45 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // Account Data Backup, Restore, and Wipe states
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [showRestoreAccountModal, setShowRestoreAccountModal] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+
+  const handleBackupAccountData = async () => {
+    if (!currentUser || isGuest) return;
+    setIsBackingUp(true);
+    try {
+      const blob = await exportAccountData(currentUser);
+      downloadAccountDataFile(blob, currentUser.name);
+      showToast('Account data backup downloaded successfully (JSON).');
+    } catch (err: any) {
+      console.error('Backup error:', err);
+      showToast('Error exporting backup: ' + (err?.message || 'unknown error'));
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    if (!currentUser || isGuest) return;
+    try {
+      await wipeAccountAndData(currentUser);
+      setShowDeleteAccountModal(false);
+      showToast('Your account and all associated data have been permanently wiped.');
+      await logout();
+    } catch (err: any) {
+      console.error('Account wipe error:', err);
+      showToast('Error wiping account: ' + (err?.message || 'unknown error'));
+    }
+  };
+
+  const handleRestoreSuccess = (result: RestoreResult) => {
+    showToast(
+      `Account data restored successfully: ${result.propertiesCount} properties, ${result.requestsCount} accommodation requests restored.`
+    );
   };
 
   // Live local cache stats
@@ -400,14 +451,25 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
           <div className="flex items-center gap-2">
             {!isGuest && (
-              <button
-                type="button"
-                onClick={handleOpenEdit}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Profile</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleOpenEdit}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Profile</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => logout()}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition cursor-pointer"
+                  title="Sign out of account"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Sign Out</span>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -938,6 +1000,119 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         </div>
       )}
 
+      {/* Account Data Management & Privacy Control Section */}
+      {!isGuest && currentUser && (activeProfileTab === 'profile' || activeProfileTab === 'db') && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-slate-900 text-emerald-400">
+                <HardDrive className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  Account Data Management & Sovereignty
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Backup your account data, restore from JSON files, or permanently delete your account and data.
+                </p>
+              </div>
+            </div>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full w-fit">
+              JSON Backup & Restore
+            </span>
+          </div>
+
+          {/* Action Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* 1. Backup my Account Data */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-slate-900">
+                    <Download className="w-4 h-4 text-emerald-600" />
+                    <span>Backup my Account Data</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                    Export JSON
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Export a full, machine-readable JSON backup containing your user profile, published properties, accommodation requests, roommate dossiers, and saved listings.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleBackupAccountData}
+                disabled={isBackingUp}
+                className="w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isBackingUp ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Preparing JSON Backup...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Backup my Account Data</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* 2. Restore My Account Data */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-slate-900">
+                    <Upload className="w-4 h-4 text-teal-600" />
+                    <span>Restore My Account Data</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">
+                    Import JSON
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Restore or migrate your account records, properties, and accommodation requests quickly by uploading a valid Comfort Housing JSON backup file.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowRestoreAccountModal(true)}
+                className="w-full py-2.5 px-4 bg-teal-700 hover:bg-teal-800 active:scale-98 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Restore My Account Data</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3. Danger Zone: Delete my Account and Data */}
+          <div className="mt-2 p-4 rounded-xl border border-rose-200 bg-rose-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2 text-rose-900 font-extrabold text-xs sm:text-sm">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Delete my Account and Data</span>
+              </div>
+              <p className="text-xs text-rose-800 leading-relaxed">
+                Permanently purge your account, published listings, accommodation requests, and local device records. Features a warning and a second confirmation button to avoid deleting data by mistake.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowDeleteAccountModal(true)}
+              className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:scale-98 text-white rounded-xl text-xs font-extrabold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete my Account and Data</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Edit Property Needed Modal */}
       {editingPropertyNeeded && (
         <EditPropertyNeededModal
@@ -1117,6 +1292,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Delete Account & Data Wipe Modal with Double Confirmation */}
+      {showDeleteAccountModal && currentUser && (
+        <DeleteAccountModal
+          isOpen={showDeleteAccountModal}
+          user={currentUser}
+          onClose={() => setShowDeleteAccountModal(false)}
+          onConfirmDelete={handleConfirmDeleteAccount}
+        />
+      )}
+
+      {/* Restore Account Data Modal with JSON File Upload */}
+      {showRestoreAccountModal && currentUser && (
+        <RestoreAccountModal
+          isOpen={showRestoreAccountModal}
+          currentUser={currentUser}
+          onClose={() => setShowRestoreAccountModal(false)}
+          onRestoreSuccess={handleRestoreSuccess}
+        />
       )}
     </div>
   );

@@ -18,6 +18,9 @@ import { NotificationsDrawer } from './components/notifications/NotificationsDra
 import { UserProfile } from './components/profile/UserProfile';
 import { AuthModal } from './components/common/AuthModal';
 import { CreatePropertyNeededModal } from './components/tenants/CreatePropertyNeededModal';
+import { Footer } from './components/common/Footer';
+import { TermsOfServiceModal } from './components/legal/TermsOfServiceModal';
+import { PrivacyPolicyModal } from './components/legal/PrivacyPolicyModal';
 
 function MainAppContent() {
   const { isGuest } = useAuth();
@@ -28,6 +31,8 @@ function MainAppContent() {
   const [highlightedOfferId, setHighlightedOfferId] = useState<string | undefined>(undefined);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   // Cross-component direct chat state
   const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
@@ -133,6 +138,17 @@ function MainAppContent() {
         )}
       </main>
 
+      {/* App Footer with Legal Links, Copyright and Brand Statement */}
+      <Footer
+        onNavigateTab={tab => {
+          setCurrentTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onOpenTerms={() => setShowTerms(true)}
+        onOpenPrivacy={() => setShowPrivacy(true)}
+        onOpenAuth={() => setShowAuthModal(true)}
+      />
+
       {/* Create Listing Modal */}
       {showCreateListing && (
         <CreateListingModal
@@ -196,6 +212,22 @@ function MainAppContent() {
           setCurrentTab('profile');
         }}
       />
+
+      {/* Terms of Service Legal Modal */}
+      {showTerms && (
+        <TermsOfServiceModal
+          isOpen={showTerms}
+          onClose={() => setShowTerms(false)}
+        />
+      )}
+
+      {/* Privacy Policy Legal Modal */}
+      {showPrivacy && (
+        <PrivacyPolicyModal
+          isOpen={showPrivacy}
+          onClose={() => setShowPrivacy(false)}
+        />
+      )}
     </div>
   );
 }
