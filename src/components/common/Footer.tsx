@@ -4,6 +4,8 @@ import {
   ShieldCheck,
   Lock,
   Scale,
+  RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import { NavTab } from './Navigation';
 
@@ -11,12 +13,16 @@ interface FooterProps {
   onNavigateTab?: (tab: NavTab) => void;
   onOpenTerms: () => void;
   onOpenPrivacy: () => void;
+  onOpenRenewalTerms?: () => void;
+  onOpenCopyrightAgent?: () => void;
   onOpenAuth?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenTerms,
   onOpenPrivacy,
+  onOpenRenewalTerms,
+  onOpenCopyrightAgent,
 }) => {
   return (
     <footer className="bg-slate-900 text-slate-300 mt-auto border-t border-slate-800">
@@ -52,9 +58,9 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Legal, Security & Policies */}
           <div className="space-y-3">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-white">
-              Trust & Legal Policies
+              Trust, Rights & Legal Policies
             </h4>
-            <ul className="space-y-2.5 text-xs">
+            <ul className="space-y-2 text-xs">
               <li>
                 <button
                   type="button"
@@ -75,6 +81,30 @@ export const Footer: React.FC<FooterProps> = ({
                   <span className="underline underline-offset-2">Privacy Policy</span>
                 </button>
               </li>
+              {onOpenCopyrightAgent && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={onOpenCopyrightAgent}
+                    className="text-slate-300 hover:text-rose-400 font-semibold transition flex items-center gap-2 cursor-pointer group"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-400 group-hover:text-rose-300" />
+                    <span className="underline underline-offset-2">DMCA & Copyright Agent</span>
+                  </button>
+                </li>
+              )}
+              {onOpenRenewalTerms && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={onOpenRenewalTerms}
+                    className="text-slate-300 hover:text-emerald-400 font-semibold transition flex items-center gap-2 cursor-pointer group"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-400" />
+                    <span className="underline underline-offset-2">Pro Renewal Terms</span>
+                  </button>
+                </li>
+              )}
               <li className="pt-1">
                 <span className="text-[11px] text-slate-400 block">
                   Support & Verification Desk:
@@ -111,7 +141,7 @@ export const Footer: React.FC<FooterProps> = ({
           </p>
 
           {/* Quick legal links strip */}
-          <div className="flex items-center gap-4 pt-1 text-[11px] text-slate-500">
+          <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500 flex-wrap justify-center">
             <button
               type="button"
               onClick={onOpenTerms}
@@ -127,6 +157,30 @@ export const Footer: React.FC<FooterProps> = ({
             >
               Privacy Policy
             </button>
+            {onOpenCopyrightAgent && (
+              <>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={onOpenCopyrightAgent}
+                  className="hover:text-slate-300 transition cursor-pointer"
+                >
+                  DMCA Copyright Agent
+                </button>
+              </>
+            )}
+            {onOpenRenewalTerms && (
+              <>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={onOpenRenewalTerms}
+                  className="hover:text-slate-300 transition cursor-pointer"
+                >
+                  Renewal Terms
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

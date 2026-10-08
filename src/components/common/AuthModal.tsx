@@ -1,6 +1,21 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { X, Lock, Mail, User, Phone, Building2, Home, Users, ArrowRight, Briefcase } from 'lucide-react';
+import {
+  X,
+  Lock,
+  Mail,
+  User,
+  Phone,
+  Building2,
+  Home,
+  Users,
+  ArrowRight,
+  Briefcase,
+  Calendar,
+  AlertTriangle,
+  ShieldAlert,
+  CheckCircle2,
+} from 'lucide-react';
 import { UserRole } from '../../types';
 import { phoneToVirtualEmail } from '../../utils/phoneAuth';
 import { TermsOfServiceModal } from '../legal/TermsOfServiceModal';
@@ -23,11 +38,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [role, setRole] = useState<'tenant' | 'landlord' | 'property_manager' | 'agent'>('tenant');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+
+  const calculateAge = (dobString: string): number => {
+    if (!dobString) return 0;
+    const dob = new Date(dobString);
+    if (isNaN(dob.getTime())) return 0;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const calculatedAge = birthDate ? calculateAge(birthDate) : null;
+  const isJuvenile = calculatedAge !== null && calculatedAge <= 16;
 
   if (!isOpen) return null;
 
@@ -110,13 +143,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
           return;
         }
 
+        // Age Gate Verification (Must be above 16 years)
+        if (!birthDate) {
+          setErrorMessage('Age Restriction Check: Please provide your Date of Birth.');
+          setLoading(false);
+          return;
+        }
+
+        const userAge = calculateAge(birthDate);
+        if (userAge <= 16) {
+          setErrorMessage(
+            'Age Restriction Notice: You must be above 16 years old to create an account. Juveniles (16 or younger) must have their parent or legal guardian create and control their account instead.'
+          );
+          setLoading(false);
+          return;
+        }
+
+        if (!ageConfirmed) {
+          setErrorMessage('Please check the age certification box confirming you are above 16 years of age.');
+          setLoading(false);
+          return;
+        }
+
         const ok = await signupWithEmail(
           name.trim(),
           targetEmail,
           password,
           role,
           targetPhone,
-          role === 'property_manager' ? companyName.trim() : undefined
+          role === 'property_manager' ? companyName.trim() : undefined,
+          {
+            birthDate,
+            age: userAge,
+            ageConfirmed: true,
+            whatsappNotificationsEnabled: true,
+            emailNotificationsEnabled: true,
+          }
         );
 
         if (ok) {
@@ -458,6 +520,70 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
               </div>
             </div>
 
+            {/* Age Gate on Signup (Age Restrictions: Above 16 Years) */}
+            {mode === 'signup' && (
+              <div className="space-y-2 pt-1 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="block font-semibold text-slate-700 text-xs">
+                    Date of Birth (Age Gate: Above 16 Only) <span className="text-rose-500">*</span>
+                  </label>
+                  {calculatedAge !== null && (
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        calculatedAge > 16
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {calculatedAge} years old
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="date"
+                    required
+                    max={new Date().toISOString().split('T')[0]}
+                    value={birthDate}
+                    onChange={e => setBirthDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden text-xs font-medium"
+                  />
+                </div>
+
+                {/* Juvenile Restriction Warning Notice */}
+                {isJuvenile && (
+                  <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs space-y-1.5 animate-in fade-in">
+                    <div className="flex items-center gap-1.5 font-extrabold text-rose-900">
+                      <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Registration Restricted (Above 16 Years Required)</span>
+                    </div>
+                    <p className="text-[11px] text-rose-900 leading-relaxed">
+                      You indicated you are <strong>{calculatedAge} years old</strong>. In accordance with platform housing compliance and child protection standards, registration is strictly restricted for juveniles (aged 16 or below).
+                    </p>
+                    <div className="p-2 bg-white rounded-lg border border-rose-200 text-rose-900 font-semibold text-[11px]">
+                      Advisory: Please have your parent or legal guardian create, control, and manage your account instead.
+                    </div>
+                  </div>
+                )}
+
+                {/* Age Certification Checkbox */}
+                <label className="flex items-start gap-2 pt-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={ageConfirmed}
+                    onChange={e => setAgeConfirmed(e.target.checked)}
+                    disabled={isJuvenile}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                  />
+                  <span className="text-[11px] text-slate-600 leading-snug">
+                    I confirm that I am <strong>above 16 years of age (17+)</strong>. I understand that juveniles are not permitted to register independently and must have a guardian control their account.
+                  </span>
+                </label>
+              </div>
+            )}
+
             {/* Terms of Service & Privacy Policy Notice before sign up / login */}
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 text-center leading-relaxed">
               <span>By {mode === 'signup' ? 'creating an account' : 'signing in'}, you agree to our </span>
@@ -481,7 +607,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthent
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (mode === 'signup' && isJuvenile)}
               className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl font-bold transition shadow-xs cursor-pointer mt-2 flex items-center justify-center gap-2"
             >
               <span>

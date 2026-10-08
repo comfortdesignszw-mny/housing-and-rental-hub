@@ -138,7 +138,69 @@ export const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen
 
           <section className="space-y-2">
             <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
-              <span>8. Intellectual Property & Brand Statement</span>
+              <span>8. User-Uploaded Content, Media & Copyright Disclaimer (DMCA Agent Filed)</span>
+            </h4>
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-950 text-xs space-y-1.5">
+              <p className="font-bold">
+                ABSOLUTE DEVELOPER & SYSTEM LIABILITY DISCLAIMER:
+              </p>
+              <p>
+                Comfort Housing and Rental Hub, Comfort Designs, and the application system developers operate strictly as a technical intermediary and hosting provider. <strong>The app developers and platform operators are NOT liable for any property photographs, floor plans, blueprints, architectural drawings, documents, or media files uploaded by third-party users if they violate or infringe any domestic or international copyright law, trademark, or intellectual property right.</strong>
+              </p>
+              <p>
+                Users who upload property photos, accommodation requests, or media warrant and represent that they either hold full copyright ownership or possess express, verified written authorization from the copyright holder. Users agree to fully indemnify and hold harmless the platform developers from any claims arising from user-uploaded files.
+              </p>
+            </div>
+            <p className="text-xs text-slate-600">
+              In compliance with copyright and digital safe harbor frameworks, we have designated a formal <strong>Copyright & DMCA Agent</strong> to receive infringement notices:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-slate-700">
+              <li><strong>Designated Agent:</strong> Comfort Compliance & Copyright Officer</li>
+              <li><strong>Direct Notice Email:</strong> comfort.designszw@gmail.com</li>
+              <li><strong>Compliance Telephone / WhatsApp:</strong> +263 772 824 132</li>
+              <li><strong>Jurisdiction:</strong> Harare, Zimbabwe</li>
+              <li>Upon verified notice, infringing materials will be removed or disabled within 24 hours without liability to the system developers.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
+              <span>9. Age Gate & Age Restrictions (Strictly Above 16 Years)</span>
+            </h4>
+            <p>
+              Comfort Housing enforces a strict age gate. You must be <strong>above 16 years of age (17 years or older)</strong> to register an individual account or execute rental transactions.
+            </p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-950 text-xs">
+              <strong>Juvenile Registration Policy:</strong> If a prospective tenant or student is 16 years old or younger, independent registration is strictly prohibited. In such cases, the juvenile's parent or legal guardian must create, control, and administer the account on the juvenile's behalf.
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
+              <span>10. Pro Subscriptions, Transparent Renewal Terms & Cancellation</span>
+            </h4>
+            <p>
+              Premium features (such as Landlord Pro, Agent Portfolio Pro, and Featured Listing Boosts) are provided under clear renewal terms:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-slate-700">
+              <li><strong>Automatic Renewal:</strong> Paid subscriptions automatically renew at the expiration of each designated billing cycle (monthly or annual) at prevailing rates unless cancelled prior to the renewal date.</li>
+              <li><strong>Pre-Billing Alerts:</strong> Users receive automated renewal reminders via WhatsApp/email 3 days before any scheduled charge.</li>
+              <li><strong>Cancellation Without Penalties:</strong> Users may cancel auto-renewal at any time with one click from their profile. Pro benefits continue until the end of the paid billing cycle without partial refunds or surprise recurring charges.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
+              <span>11. Device Behaviour, Notification Alerts & Unsubscribe Controls</span>
+            </h4>
+            <p>
+              Users maintain sovereign control over platform alerts on their devices. Every user can instantaneously unsubscribe from WhatsApp or Email notifications with a single click in their account settings, completely revoking alert permissions.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
+              <span>12. Intellectual Property & Brand Statement</span>
             </h4>
             <p>
               The platform design, interfaces, brand assets, and custom architecture of Comfort Housing and Rental Hub are the exclusive intellectual property of <strong>Comfort Designs</strong>.
@@ -147,7 +209,7 @@ export const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen
 
           <section className="space-y-2">
             <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
-              <span>9. Limitation of Liability & Governing Law</span>
+              <span>13. Limitation of Liability & Governing Law</span>
             </h4>
             <p>
               To the fullest extent permitted by law, ComfortHub and Comfort Designs shall not be liable for any indirect, incidental, or consequential damages resulting from property disputes, lease defaults, physical property viewings, utility outages, or interactions between users. These Terms are governed by and construed in accordance with the laws of the Republic of Zimbabwe.
@@ -156,7 +218,7 @@ export const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen
 
           <section className="space-y-1 pt-2 border-t border-slate-200 text-xs text-slate-500">
             <p>For questions or formal legal notices, contact: <strong>comfort.designszw@gmail.com</strong></p>
-            <p>© 2026 Comfort Housing and Rental Hub. All Rights Reserved. Designed with ❤️ by Comfort Designs.</p>
+            <p>@2026 Comfort Housing and Rental Hub. All Rights Reserved. Designed by Comfort Designs - +263772824132</p>
           </section>
         </div>
 

@@ -36,7 +36,14 @@ interface AuthContextType {
     password?: string,
     role?: UserRole,
     phone?: string,
-    companyName?: string
+    companyName?: string,
+    extraFields?: {
+      birthDate?: string;
+      age?: number;
+      ageConfirmed?: boolean;
+      whatsappNotificationsEnabled?: boolean;
+      emailNotificationsEnabled?: boolean;
+    }
   ) => Promise<boolean>;
   updateUserProfile: (userUpdates: Partial<User>) => Promise<void>;
   updateUserRoleByAdmin: (targetUserId: string, newRole: UserRole) => Promise<void>;
@@ -258,7 +265,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password = 'Password@123',
     role: UserRole = 'tenant',
     phone = '+263 77 ',
-    companyName?: string
+    companyName?: string,
+    extraFields?: {
+      birthDate?: string;
+      age?: number;
+      ageConfirmed?: boolean;
+      whatsappNotificationsEnabled?: boolean;
+      emailNotificationsEnabled?: boolean;
+    }
   ): Promise<boolean> => {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -278,6 +292,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verified: cred.user.emailVerified,
         createdAt: Date.now(),
         city: 'Harare',
+        birthDate: extraFields?.birthDate || undefined,
+        age: extraFields?.age || undefined,
+        ageConfirmed: extraFields?.ageConfirmed ?? true,
+        whatsappNotificationsEnabled: extraFields?.whatsappNotificationsEnabled ?? true,
+        emailNotificationsEnabled: extraFields?.emailNotificationsEnabled ?? true,
+        subscriptionTier: 'free',
+        subscriptionStatus: 'none',
         bio: companyName?.trim()
           ? `${companyName.trim()} - Registered Property Management company on Comfort Housing.`
           : `${finalRole.replace('_', ' ')} active on Comfort Housing.`,
@@ -330,6 +351,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bio: updated.bio || '',
         city: updated.city || 'Harare',
         avatar: updated.avatar || '',
+        birthDate: updated.birthDate || '',
+        age: typeof updated.age === 'number' ? updated.age : 0,
+        ageConfirmed: updated.ageConfirmed ?? true,
+        whatsappNotificationsEnabled: updated.whatsappNotificationsEnabled ?? true,
+        emailNotificationsEnabled: updated.emailNotificationsEnabled ?? true,
+        subscriptionTier: updated.subscriptionTier || 'free',
+        subscriptionStatus: updated.subscriptionStatus || 'none',
+        subscriptionRenewsAt: typeof updated.subscriptionRenewsAt === 'number' ? updated.subscriptionRenewsAt : 0,
+        subscriptionAutoRenew: updated.subscriptionAutoRenew ?? false,
       });
       await updateDoc(doc(firestoreDb, 'users', currentUser.id), sanitizedUpdates);
     } catch (err) {

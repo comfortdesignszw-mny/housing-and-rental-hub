@@ -1,5 +1,8 @@
 export type UserRole = 'tenant' | 'landlord' | 'property_manager' | 'agent' | 'admin' | 'guest';
 
+export type SubscriptionTier = 'free' | 'pro' | 'agent_pro' | 'featured';
+export type SubscriptionStatus = 'none' | 'active' | 'cancelled' | 'expired';
+
 export interface User {
   id: string;
   name: string;
@@ -13,6 +16,15 @@ export interface User {
   createdAt: number;
   bio?: string;
   city?: string;
+  birthDate?: string; // ISO YYYY-MM-DD
+  age?: number;
+  ageConfirmed?: boolean;
+  whatsappNotificationsEnabled?: boolean;
+  emailNotificationsEnabled?: boolean;
+  subscriptionTier?: SubscriptionTier;
+  subscriptionStatus?: SubscriptionStatus;
+  subscriptionRenewsAt?: number;
+  subscriptionAutoRenew?: boolean;
 }
 
 export type PropertyType =

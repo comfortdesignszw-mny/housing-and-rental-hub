@@ -21,6 +21,8 @@ import { CreatePropertyNeededModal } from './components/tenants/CreatePropertyNe
 import { Footer } from './components/common/Footer';
 import { TermsOfServiceModal } from './components/legal/TermsOfServiceModal';
 import { PrivacyPolicyModal } from './components/legal/PrivacyPolicyModal';
+import { RenewalTermsModal } from './components/legal/RenewalTermsModal';
+import { CopyrightAgentModal } from './components/legal/CopyrightAgentModal';
 
 function MainAppContent() {
   const { isGuest } = useAuth();
@@ -33,6 +35,8 @@ function MainAppContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showRenewalTerms, setShowRenewalTerms] = useState(false);
+  const [showCopyrightAgent, setShowCopyrightAgent] = useState(false);
 
   // Cross-component direct chat state
   const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
@@ -146,6 +150,8 @@ function MainAppContent() {
         }}
         onOpenTerms={() => setShowTerms(true)}
         onOpenPrivacy={() => setShowPrivacy(true)}
+        onOpenRenewalTerms={() => setShowRenewalTerms(true)}
+        onOpenCopyrightAgent={() => setShowCopyrightAgent(true)}
         onOpenAuth={() => setShowAuthModal(true)}
       />
 
@@ -226,6 +232,22 @@ function MainAppContent() {
         <PrivacyPolicyModal
           isOpen={showPrivacy}
           onClose={() => setShowPrivacy(false)}
+        />
+      )}
+
+      {/* Pro Subscription Renewal Terms Modal */}
+      {showRenewalTerms && (
+        <RenewalTermsModal
+          isOpen={showRenewalTerms}
+          onClose={() => setShowRenewalTerms(false)}
+        />
+      )}
+
+      {/* DMCA Copyright Agent Modal */}
+      {showCopyrightAgent && (
+        <CopyrightAgentModal
+          isOpen={showCopyrightAgent}
+          onClose={() => setShowCopyrightAgent(false)}
         />
       )}
     </div>

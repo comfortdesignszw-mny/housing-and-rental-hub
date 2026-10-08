@@ -32,6 +32,10 @@ import {
   Share2,
   Trash2,
   Plus,
+  Bell,
+  BellOff,
+  Crown,
+  Calendar,
 } from 'lucide-react';
 import { UserRole, User, PropertyNeeded } from '../../types';
 import { compressImage } from '../../services/imageCompression';
@@ -41,6 +45,8 @@ import { EditPropertyNeededModal } from '../tenants/EditPropertyNeededModal';
 import { ShareModal } from '../common/ShareModal';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import { RestoreAccountModal } from './RestoreAccountModal';
+import { RenewalTermsModal } from '../legal/RenewalTermsModal';
+import { CopyrightAgentModal } from '../legal/CopyrightAgentModal';
 import {
   exportAccountData,
   downloadAccountDataFile,
@@ -104,9 +110,23 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   );
   const [editCity, setEditCity] = useState(currentUser?.city || 'Harare');
   const [editBio, setEditBio] = useState(currentUser?.bio || '');
+  const [editBirthDate, setEditBirthDate] = useState(currentUser?.birthDate || '');
   const [editAvatar, setEditAvatar] = useState(currentUser?.avatar || '');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const editAvatarFileRef = useRef<HTMLInputElement>(null);
+
+  const calculateAge = (dobString: string): number => {
+    if (!dobString) return 0;
+    const dob = new Date(dobString);
+    if (isNaN(dob.getTime())) return 0;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
   // Status feedback toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -151,6 +171,77 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const handleRestoreSuccess = (result: RestoreResult) => {
     showToast(
       `Account data restored successfully: ${result.propertiesCount} properties, ${result.requestsCount} accommodation requests restored.`
+    );
+  };
+
+  // Renewal Terms & Copyright Agent modals state
+  const [showRenewalTermsModal, setShowRenewalTermsModal] = useState(false);
+  const [showCopyrightAgentModal, setShowCopyrightAgentModal] = useState(false);
+
+  // Unsubscribe & Notification alerts toggle handlers
+  const handleToggleWhatsappAlerts = async () => {
+    if (!currentUser || isGuest) return;
+    const currentVal = currentUser.whatsappNotificationsEnabled !== false;
+    await updateUserProfile({ whatsappNotificationsEnabled: !currentVal });
+    showToast(
+      !currentVal
+        ? 'Subscribed to WhatsApp rental & match alerts.'
+        : 'Unsubscribed from WhatsApp alerts. Automated messages are muted.'
+    );
+  };
+
+  const handleToggleEmailAlerts = async () => {
+    if (!currentUser || isGuest) return;
+    const currentVal = currentUser.emailNotificationsEnabled !== false;
+    await updateUserProfile({ emailNotificationsEnabled: !currentVal });
+    showToast(
+      !currentVal
+        ? 'Subscribed to Email alerts.'
+        : 'Unsubscribed from Email alerts. Notification emails are muted.'
+    );
+  };
+
+  const handleUnsubscribeAllAlerts = async () => {
+    if (!currentUser || isGuest) return;
+    await updateUserProfile({
+      whatsappNotificationsEnabled: false,
+      emailNotificationsEnabled: false,
+    });
+    showToast('Unsubscribed from ALL WhatsApp and Email alerts. Your device alerts are muted.');
+  };
+
+  const handleSubscribeAllAlerts = async () => {
+    if (!currentUser || isGuest) return;
+    await updateUserProfile({
+      whatsappNotificationsEnabled: true,
+      emailNotificationsEnabled: true,
+    });
+    showToast('Resubscribed to WhatsApp and Email rental alerts.');
+  };
+
+  // Pro Subscription Upgrade & Auto-Renew toggles
+  const handleToggleAutoRenew = async () => {
+    if (!currentUser || isGuest) return;
+    const currentVal = currentUser.subscriptionAutoRenew === true;
+    await updateUserProfile({ subscriptionAutoRenew: !currentVal });
+    showToast(
+      !currentVal
+        ? 'Auto-renewal enabled for next billing cycle.'
+        : 'Auto-renewal cancelled. Your Pro access remains active until expiration.'
+    );
+  };
+
+  const handleActivateProTier = async (tier: 'pro' | 'agent_pro') => {
+    if (!currentUser || isGuest) return;
+    const renewsAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    await updateUserProfile({
+      subscriptionTier: tier,
+      subscriptionStatus: 'active',
+      subscriptionRenewsAt: renewsAt,
+      subscriptionAutoRenew: true,
+    });
+    showToast(
+      `Upgraded to ${tier === 'agent_pro' ? 'Agent Portfolio Pro' : 'Landlord Pro'}! Renewal terms applied.`
     );
   };
 
@@ -1113,6 +1204,232 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         </div>
       )}
 
+      {/* Device Notification Alerts & Unsubscribe Controls Card */}
+      {!isGuest && currentUser && (activeProfileTab === 'profile' || activeProfileTab === 'db') && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-slate-900 text-emerald-400">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  Notification Alerts & Unsubscribe Controls
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Total user control over automated messaging and device behaviour. Unsubscribe at any time.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleUnsubscribeAllAlerts}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <BellOff className="w-3.5 h-3.5 text-rose-600" />
+                <span>Unsubscribe All</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSubscribeAllAlerts}
+                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Re-subscribe All</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* WhatsApp Notification Alert Control */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-slate-900">
+                    <MessageCircle className="w-4 h-4 text-emerald-600" />
+                    <span>WhatsApp Rental & Match Alerts</span>
+                  </div>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                      currentUser.whatsappNotificationsEnabled !== false
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {currentUser.whatsappNotificationsEnabled !== false ? 'Subscribed' : 'Unsubscribed'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Sends direct, non-intrusive notifications when matching rentals, tenant demands, or roommate inquiries occur in your selected Zimbabwe locations.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {currentUser.whatsappNumber || currentUser.phone || 'Number linked'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleToggleWhatsappAlerts}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    currentUser.whatsappNotificationsEnabled !== false
+                      ? 'bg-rose-100 hover:bg-rose-200 text-rose-800'
+                      : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                  }`}
+                >
+                  {currentUser.whatsappNotificationsEnabled !== false
+                    ? 'Unsubscribe from WhatsApp'
+                    : 'Subscribe to WhatsApp Alerts'}
+                </button>
+              </div>
+            </div>
+
+            {/* Email Notification Alert Control */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition flex flex-col justify-between space-y-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-slate-900">
+                    <Mail className="w-4 h-4 text-teal-600" />
+                    <span>Email Dossiers & Update Alerts</span>
+                  </div>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                      currentUser.emailNotificationsEnabled !== false
+                        ? 'bg-teal-100 text-teal-800'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {currentUser.emailNotificationsEnabled !== false ? 'Subscribed' : 'Unsubscribed'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Dispatches periodic rental summaries, lease renewal reminders, and application receipts to your registered email address.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                <span className="text-[11px] text-slate-500 truncate max-w-[150px]">
+                  {currentUser.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleToggleEmailAlerts}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    currentUser.emailNotificationsEnabled !== false
+                      ? 'bg-rose-100 hover:bg-rose-200 text-rose-800'
+                      : 'bg-teal-700 hover:bg-teal-800 text-white'
+                  }`}
+                >
+                  {currentUser.emailNotificationsEnabled !== false
+                    ? 'Unsubscribe from Email'
+                    : 'Subscribe to Email Alerts'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pro Subscriptions & Renewal Terms Card */}
+      {!isGuest && currentUser && (activeProfileTab === 'profile' || activeProfileTab === 'db') && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-700">
+                <Crown className="w-5 h-5 stroke-[2.3]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  Pro Subscriptions & Renewal Management
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Elevate your listings with verified status, auto-renewal transparency, and featured visibility.
+                </p>
+              </div>
+            </div>
+
+            {/* Renewal terms button */}
+            <button
+              type="button"
+              onClick={() => setShowRenewalTermsModal(true)}
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer w-fit"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Renewal Terms</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Current Tier</span>
+              <span className="font-extrabold text-slate-900 text-sm block">
+                {currentUser.subscriptionTier === 'agent_pro'
+                  ? 'Agent Portfolio Pro ($120/yr)'
+                  : currentUser.subscriptionTier === 'pro'
+                  ? 'Landlord Pro ($15/mo)'
+                  : 'Free Explorer Tier'}
+              </span>
+              <span className="text-[11px] text-emerald-700 font-semibold block">
+                {currentUser.subscriptionStatus === 'active' ? '● Active Subscription' : 'Standard Free Access'}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Automatic Renewal</span>
+              <span className="font-extrabold text-slate-900 text-sm block">
+                {currentUser.subscriptionAutoRenew ? 'Enabled (Auto-Renews)' : 'Cancelled / Manual'}
+              </span>
+              <span className="text-[11px] text-slate-500 block">
+                Cancel auto-renewal anytime with one click.
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Next Renewal Cycle</span>
+              <span className="font-extrabold text-slate-900 text-sm block">
+                {currentUser.subscriptionRenewsAt
+                  ? new Date(currentUser.subscriptionRenewsAt).toLocaleDateString()
+                  : 'N/A (Free Plan)'}
+              </span>
+              <span className="text-[11px] text-slate-500 block">
+                Pre-billing notice sent 3 days before charge.
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleActivateProTier('pro')}
+                className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Crown className="w-3.5 h-3.5" />
+                <span>Activate Landlord Pro ($15/mo)</span>
+              </button>
+              {currentUser.subscriptionStatus === 'active' && (
+                <button
+                  type="button"
+                  onClick={handleToggleAutoRenew}
+                  className="px-3 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  {currentUser.subscriptionAutoRenew ? 'Cancel Auto-Renewal' : 'Enable Auto-Renewal'}
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCopyrightAgentModal(true)}
+              className="text-xs text-slate-500 hover:text-rose-600 font-semibold underline underline-offset-2 cursor-pointer"
+            >
+              DMCA Copyright Agent & Developer Disclaimer
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Edit Property Needed Modal */}
       {editingPropertyNeeded && (
         <EditPropertyNeededModal
@@ -1311,6 +1628,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           currentUser={currentUser}
           onClose={() => setShowRestoreAccountModal(false)}
           onRestoreSuccess={handleRestoreSuccess}
+        />
+      )}
+
+      {/* Pro Subscription Renewal Terms Modal */}
+      {showRenewalTermsModal && (
+        <RenewalTermsModal
+          isOpen={showRenewalTermsModal}
+          onClose={() => setShowRenewalTermsModal(false)}
+        />
+      )}
+
+      {/* DMCA & Copyright Agent Information Modal */}
+      {showCopyrightAgentModal && (
+        <CopyrightAgentModal
+          isOpen={showCopyrightAgentModal}
+          onClose={() => setShowCopyrightAgentModal(false)}
         />
       )}
     </div>

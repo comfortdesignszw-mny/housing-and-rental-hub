@@ -138,16 +138,43 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
 
           <section className="space-y-2">
             <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
-              <span>6. Cookies & Client-Side Cache</span>
+              <span>6. Self-Hosted Typography & Zero Third-Party IP Leakage</span>
             </h4>
             <p>
-              We do not deploy intrusive third-party tracking cookies. Local storage and IndexedDB are strictly utilized to store your active authentication session, UI preferences, and offline synchronization queues.
+              To protect user privacy and prevent external tracking, <strong>Comfort Housing does not load fonts from Google Fonts or external third-party content delivery networks (CDNs)</strong>. All typography is rendered using locally self-hosted, native operating system font stacks. This ensures that your IP address and device fingerprint are never transmitted to external font servers when you browse or use the app.
             </p>
           </section>
 
           <section className="space-y-2">
             <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
-              <span>7. Compliance with Zimbabwean Data Protection Legislation</span>
+              <span>7. Juvenile Privacy Protection & Age Restrictions (Above 16 Years)</span>
+            </h4>
+            <p>
+              In strict accordance with youth privacy and child protection standards, Comfort Housing restricts account registration to individuals <strong>above 16 years of age (17 years or older)</strong>. We do not knowingly collect or solicit personal information from juveniles aged 16 or below. Any accommodation search on behalf of a juvenile must be registered, administered, and controlled by their parent or legal guardian.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
+              <span>8. User-Uploaded Files & Copyright Compliance Safe Harbor</span>
+            </h4>
+            <p>
+              Users may upload property images, floor plans, and accommodation dossiers. <strong>The app and system developers are not liable for files or photographs uploaded by users if they violate copyright or trademark laws.</strong> If you believe a file infringes your copyright, you may notify our designated Copyright Agent (email: <em>comfort.designszw@gmail.com</em>, WhatsApp: <em>+263 772 824 132</em>) for expeditious takedown.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
+              <span>9. Notification Preferences & Immediate Unsubscribe Rights</span>
+            </h4>
+            <p>
+              You maintain total autonomy over notification alerts dispatched to your device. You may toggle off or click <strong>"Unsubscribe from WhatsApp Alerts"</strong> or <strong>"Unsubscribe from Email Alerts"</strong> directly inside your profile settings at any time without restriction.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-1.5">
+              <span>10. Compliance with Zimbabwean Data Protection Legislation</span>
             </h4>
             <p>
               ComfortHub adheres to the principles of lawful processing, purpose limitation, transparency, and data minimization set forth in the <strong>Cyber and Data Protection Act [Chapter 12:07] of Zimbabwe</strong>.
@@ -156,7 +183,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
 
           <section className="space-y-1 pt-2 border-t border-slate-200 text-xs text-slate-500">
             <p>For privacy inquiries or data rights requests, contact our privacy desk: <strong>comfort.designszw@gmail.com</strong></p>
-            <p>© 2026 Comfort Housing and Rental Hub. All Rights Reserved. Designed with ❤️ by Comfort Designs.</p>
+            <p>@2026 Comfort Housing and Rental Hub. All Rights Reserved. Designed by Comfort Designs - +263772824132</p>
           </section>
         </div>
 
