@@ -360,6 +360,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionStatus: updated.subscriptionStatus || 'none',
         subscriptionRenewsAt: typeof updated.subscriptionRenewsAt === 'number' ? updated.subscriptionRenewsAt : 0,
         subscriptionAutoRenew: updated.subscriptionAutoRenew ?? false,
+        ...(updated.notificationSettings ? { notificationSettings: updated.notificationSettings } : {}),
       });
       await updateDoc(doc(firestoreDb, 'users', currentUser.id), sanitizedUpdates);
     } catch (err) {

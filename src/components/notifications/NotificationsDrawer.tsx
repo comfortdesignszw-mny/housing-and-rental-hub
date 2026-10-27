@@ -19,18 +19,21 @@ import {
   Calendar,
   ExternalLink,
   MailCheck,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface NotificationsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectAction?: (url?: string) => void;
+  onOpenNotificationSettings?: () => void;
 }
 
 export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
   isOpen,
   onClose,
   onSelectAction,
+  onOpenNotificationSettings,
 }) => {
   const { currentUser } = useAuth();
   const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
@@ -165,12 +168,26 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                 </span>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {onOpenNotificationSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenNotificationSettings}
+                  title="Alert Settings (Sound, Silent, Wake Device, Top Bar Tile)"
+                  className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition cursor-pointer flex items-center gap-1 text-xs font-semibold"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span className="hidden sm:inline">Options</span>
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                aria-label="Close notifications drawer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Filter Tabs: All vs Unread vs Messages */}

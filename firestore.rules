@@ -42,7 +42,7 @@ service cloud.firestore {
     // 1. Users collection
     function isValidUser(data) {
       return data.keys().hasAll(['id', 'name', 'email', 'role', 'createdAt']) &&
-        data.keys().hasOnly(['id', 'name', 'email', 'phone', 'whatsappNumber', 'role', 'avatar', 'verified', 'createdAt', 'bio', 'city', 'companyName', 'birthDate', 'age', 'ageConfirmed', 'whatsappNotificationsEnabled', 'emailNotificationsEnabled', 'subscriptionTier', 'subscriptionStatus', 'subscriptionRenewsAt', 'subscriptionAutoRenew']) &&
+        data.keys().hasOnly(['id', 'name', 'email', 'phone', 'whatsappNumber', 'role', 'avatar', 'verified', 'createdAt', 'bio', 'city', 'companyName', 'birthDate', 'age', 'ageConfirmed', 'whatsappNotificationsEnabled', 'emailNotificationsEnabled', 'subscriptionTier', 'subscriptionStatus', 'subscriptionRenewsAt', 'subscriptionAutoRenew', 'notificationSettings']) &&
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
         data.email is string && data.email.size() <= 150 &&
@@ -63,7 +63,8 @@ service cloud.firestore {
         (!('subscriptionTier' in data) || (data.subscriptionTier in ['free', 'pro', 'agent_pro', 'featured'])) &&
         (!('subscriptionStatus' in data) || (data.subscriptionStatus in ['none', 'active', 'cancelled', 'expired'])) &&
         (!('subscriptionRenewsAt' in data) || (data.subscriptionRenewsAt is number)) &&
-        (!('subscriptionAutoRenew' in data) || (data.subscriptionAutoRenew is bool));
+        (!('subscriptionAutoRenew' in data) || (data.subscriptionAutoRenew is bool)) &&
+        (!('notificationSettings' in data) || (data.notificationSettings is map));
     }
 
     match /users/{userId} {
@@ -88,7 +89,8 @@ service cloud.firestore {
           incoming().diff(existing()).affectedKeys().hasOnly([
             'name', 'phone', 'whatsappNumber', 'bio', 'city', 'avatar', 'companyName',
             'birthDate', 'age', 'ageConfirmed', 'whatsappNotificationsEnabled', 'emailNotificationsEnabled',
-            'subscriptionTier', 'subscriptionStatus', 'subscriptionRenewsAt', 'subscriptionAutoRenew'
+            'subscriptionTier', 'subscriptionStatus', 'subscriptionRenewsAt', 'subscriptionAutoRenew',
+            'notificationSettings'
           ])
         )
       );

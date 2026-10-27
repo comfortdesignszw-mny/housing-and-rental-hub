@@ -23,6 +23,8 @@ import { TermsOfServiceModal } from './components/legal/TermsOfServiceModal';
 import { PrivacyPolicyModal } from './components/legal/PrivacyPolicyModal';
 import { RenewalTermsModal } from './components/legal/RenewalTermsModal';
 import { CopyrightAgentModal } from './components/legal/CopyrightAgentModal';
+import { TopBarNotificationTile } from './components/notifications/TopBarNotificationTile';
+import { NotificationSettingsModal } from './components/notifications/NotificationSettingsModal';
 
 function MainAppContent() {
   const { isGuest } = useAuth();
@@ -32,6 +34,7 @@ function MainAppContent() {
   const [landlordSubTab, setLandlordSubTab] = useState<string | undefined>(undefined);
   const [highlightedOfferId, setHighlightedOfferId] = useState<string | undefined>(undefined);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -74,14 +77,66 @@ function MainAppContent() {
     setShowCreatePropertyNeeded(true);
   };
 
+  const handleNotificationSelectAction = (url?: string) => {
+    setShowNotifications(false);
+    if (!url) return;
+    if (url.startsWith('messages')) {
+      const queryPart = url.includes('?') ? url.split('?')[1] : '';
+      const params = new URLSearchParams(queryPart);
+      const userId = params.get('user');
+      const userName = params.get('name') || 'User';
+      if (userId) {
+        handleStartChat(userId, decodeURIComponent(userName));
+      } else {
+        setCurrentTab('messages');
+      }
+    } else if (url.startsWith('landlord')) {
+      const queryPart = url.includes('?') ? url.split('?')[1] : '';
+      const params = new URLSearchParams(queryPart);
+      const tab = params.get('tab');
+      const offerId = params.get('offerId');
+      if (tab) {
+        setLandlordSubTab(tab);
+      }
+      if (offerId) {
+        setHighlightedOfferId(offerId);
+      }
+      setCurrentTab('landlord');
+    } else if (url.startsWith('listings')) {
+      setCurrentTab('listings');
+    } else if (url.startsWith('profile')) {
+      setCurrentTab('profile');
+    }
+  };
+
+  // Service worker background notification click listener
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      const handler = (event: MessageEvent) => {
+        if (event.data?.type === 'NOTIFICATION_CLICKED' && event.data?.actionUrl) {
+          handleNotificationSelectAction(event.data.actionUrl);
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handler);
+      return () => navigator.serviceWorker.removeEventListener('message', handler);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white pb-20 md:pb-8">
+      {/* Interactive Top Bar Notification Tile */}
+      <TopBarNotificationTile
+        onSelectAction={handleNotificationSelectAction}
+        onOpenSettings={() => setShowNotificationSettings(true)}
+      />
+
       {/* Offline Status & Sync Queue Banner */}
       <OfflineBanner />
 
       {/* Main App Bar Header */}
       <Header
         onOpenNotifications={() => setShowNotifications(true)}
+        onOpenNotificationSettings={() => setShowNotificationSettings(true)}
         onOpenCreateListing={handleOpenCreateListing}
         onOpenCreatePropertyNeeded={handleOpenCreatePropertyNeeded}
         onOpenAuthModal={() => setShowAuthModal(true)}
@@ -180,33 +235,10 @@ function MainAppContent() {
       <NotificationsDrawer
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
-        onSelectAction={(url) => {
+        onSelectAction={handleNotificationSelectAction}
+        onOpenNotificationSettings={() => {
           setShowNotifications(false);
-          if (url?.startsWith('messages')) {
-            const queryPart = url.includes('?') ? url.split('?')[1] : '';
-            const params = new URLSearchParams(queryPart);
-            const userId = params.get('user');
-            const userName = params.get('name') || 'User';
-            if (userId) {
-              handleStartChat(userId, decodeURIComponent(userName));
-            } else {
-              setCurrentTab('messages');
-            }
-          } else if (url?.startsWith('landlord')) {
-            const queryPart = url.includes('?') ? url.split('?')[1] : '';
-            const params = new URLSearchParams(queryPart);
-            const tab = params.get('tab');
-            const offerId = params.get('offerId');
-            if (tab) {
-              setLandlordSubTab(tab);
-            }
-            if (offerId) {
-              setHighlightedOfferId(offerId);
-            }
-            setCurrentTab('landlord');
-          } else if (url?.startsWith('listings')) {
-            setCurrentTab('listings');
-          }
+          setShowNotificationSettings(true);
         }}
       />
 
@@ -248,6 +280,14 @@ function MainAppContent() {
         <CopyrightAgentModal
           isOpen={showCopyrightAgent}
           onClose={() => setShowCopyrightAgent(false)}
+        />
+      )}
+
+      {/* Notification Options & Alert Settings Modal */}
+      {showNotificationSettings && (
+        <NotificationSettingsModal
+          isOpen={showNotificationSettings}
+          onClose={() => setShowNotificationSettings(false)}
         />
       )}
     </div>

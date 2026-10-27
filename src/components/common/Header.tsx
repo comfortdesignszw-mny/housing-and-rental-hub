@@ -2,16 +2,30 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { PWAInstallButton } from './PWAInstallButton';
-import { Bell, Home, ChevronDown, ShieldCheck, LogOut, LogIn, User, CheckCircle2 } from 'lucide-react';
+import {
+  Bell,
+  Home,
+  ChevronDown,
+  ShieldCheck,
+  LogOut,
+  LogIn,
+  User,
+  CheckCircle2,
+  Volume2,
+  VolumeX,
+  Zap,
+} from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import { UserRole } from '../../types';
+import { notificationService } from '../../services/notificationService';
 
 interface HeaderProps {
   onOpenNotifications: () => void;
   onOpenCreateListing: () => void;
   onOpenCreatePropertyNeeded?: () => void;
   onOpenAuthModal?: () => void;
+  onOpenNotificationSettings?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -19,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCreateListing,
   onOpenCreatePropertyNeeded,
   onOpenAuthModal,
+  onOpenNotificationSettings,
 }) => {
   const { currentUser, role, isGuest, isAuthenticated, logout } = useAuth();
   const isOnline = useOnlineStatus();
@@ -134,6 +149,37 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             )}
           </button>
+
+          {/* Quick Notification Mode Tile Pill */}
+          {onOpenNotificationSettings && (
+            <button
+              type="button"
+              onClick={onOpenNotificationSettings}
+              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold border transition cursor-pointer ${
+                notificationService.getSettings().silentMode
+                  ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
+                  : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+              }`}
+              title="Notification Options (Sound, Silent, Wake Device, Top Bar Tile)"
+            >
+              {notificationService.getSettings().silentMode ? (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Silent</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Sound</span>
+                </>
+              )}
+              {notificationService.getSettings().wakeDeviceEnabled && (
+                <span title="Wake Device Active" className="inline-flex items-center">
+                  <Zap className="w-3 h-3 text-amber-500 fill-amber-400" />
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Prominent Log In Button for Guest Mode (Requirement 4) */}
           {isGuest && (

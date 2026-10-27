@@ -24,6 +24,7 @@ import {
   PropertyNeeded,
   PropertyOffer,
 } from '../types';
+import { notificationService } from './notificationService';
 
 class FirebaseSyncService {
   private publicUnsubscribers: Unsubscribe[] = [];
@@ -184,6 +185,7 @@ class FirebaseSyncService {
 
     try {
       // 1. Messages Listener (where user is recipient)
+      let isInitialMsgsLoad = true;
       const messagesPath = 'messages';
       const unsubRecvMsgs = onSnapshot(
         query(collection(firestoreDb, messagesPath), where('recipientId', '==', userId)),
@@ -195,6 +197,23 @@ class FirebaseSyncService {
           if (msgs.length > 0) {
             await dexieDb.messages.bulkPut(msgs);
           }
+
+          if (!isInitialMsgsLoad) {
+            snapshot.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                const msg = change.doc.data() as Message;
+                notificationService.dispatchNotification({
+                  id: msg.id,
+                  title: `Message from ${msg.senderName || 'Tenant / Landlord'}`,
+                  message: msg.content || 'Sent you a new rental message.',
+                  type: 'message',
+                  actionUrl: `messages?user=${msg.senderId}&name=${encodeURIComponent(msg.senderName || 'User')}`,
+                  timestamp: msg.timestamp,
+                });
+              }
+            });
+          }
+          isInitialMsgsLoad = false;
         },
         error => {
           handleFirestoreError(error, OperationType.LIST, messagesPath);
@@ -240,6 +259,7 @@ class FirebaseSyncService {
       this.userUnsubscribers.push(unsubApplicant);
 
       // 4. Rental Applications Listener (as landlord)
+      let isInitialLandlordApps = true;
       const unsubLandlordApps = onSnapshot(
         query(collection(firestoreDb, appsPath), where('landlordId', '==', userId)),
         async snapshot => {
@@ -250,6 +270,23 @@ class FirebaseSyncService {
           if (apps.length > 0) {
             await dexieDb.applications.bulkPut(apps);
           }
+
+          if (!isInitialLandlordApps) {
+            snapshot.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                const app = change.doc.data() as RentalApplication;
+                notificationService.dispatchNotification({
+                  id: app.id,
+                  title: `New Rental Application for ${app.propertyName}`,
+                  message: `${app.applicantName} applied for "${app.propertyName}". Proposed move-in: ${app.proposedMoveInDate}.`,
+                  type: 'application_update',
+                  actionUrl: 'landlord',
+                  timestamp: app.appliedAt,
+                });
+              }
+            });
+          }
+          isInitialLandlordApps = false;
         },
         error => {
           handleFirestoreError(error, OperationType.LIST, appsPath);
@@ -258,6 +295,7 @@ class FirebaseSyncService {
       this.userUnsubscribers.push(unsubLandlordApps);
 
       // 5. Notifications Listener
+      let isInitialNotifLoad = true;
       const notifsPath = 'notifications';
       const unsubNotifs = onSnapshot(
         query(collection(firestoreDb, notifsPath), where('userId', '==', userId)),
@@ -269,6 +307,25 @@ class FirebaseSyncService {
           if (notifs.length > 0) {
             await dexieDb.notifications.bulkPut(notifs);
           }
+
+          if (!isInitialNotifLoad) {
+            snapshot.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                const notif = change.doc.data() as NotificationItem;
+                if (!notif.read) {
+                  notificationService.dispatchNotification({
+                    id: notif.id,
+                    title: notif.title,
+                    message: notif.message,
+                    type: notif.type,
+                    actionUrl: notif.actionUrl,
+                    timestamp: notif.timestamp,
+                  });
+                }
+              }
+            });
+          }
+          isInitialNotifLoad = false;
         },
         error => {
           handleFirestoreError(error, OperationType.LIST, notifsPath);
@@ -277,6 +334,7 @@ class FirebaseSyncService {
       this.userUnsubscribers.push(unsubNotifs);
 
       // 6. Property Offers Listener (where user is tenant recipient)
+      let isInitialOffersLoad = true;
       const offersPath = 'propertyOffers';
       const unsubTenantOffers = onSnapshot(
         query(collection(firestoreDb, offersPath), where('tenantId', '==', userId)),
@@ -288,11 +346,22 @@ class FirebaseSyncService {
           snapshot.docChanges().forEach(async change => {
             if (change.type === 'removed') {
               await dexieDb.propertyOffers.delete(change.doc.id);
+            } else if (change.type === 'added' && !isInitialOffersLoad) {
+              const offer = change.doc.data() as PropertyOffer;
+              notificationService.dispatchNotification({
+                id: offer.id,
+                title: `New Property Offer: ${offer.propertyName}`,
+                message: `${offer.landlordName} sent an offer for ${offer.propertyType} ($${offer.rentUsd}/mo in ${offer.location}).`,
+                type: 'property_offer',
+                actionUrl: `landlord?tab=offers&offerId=${offer.id}`,
+                timestamp: offer.createdAt,
+              });
             }
           });
           if (offers.length > 0) {
             await dexieDb.propertyOffers.bulkPut(offers);
           }
+          isInitialOffersLoad = false;
         },
         error => {
           handleFirestoreError(error, OperationType.LIST, offersPath);

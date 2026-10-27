@@ -3,6 +3,18 @@ export type UserRole = 'tenant' | 'landlord' | 'property_manager' | 'agent' | 'a
 export type SubscriptionTier = 'free' | 'pro' | 'agent_pro' | 'featured';
 export type SubscriptionStatus = 'none' | 'active' | 'cancelled' | 'expired';
 
+export type NotificationSoundChoice = 'chime' | 'marimba' | 'bell' | 'echo' | 'none';
+
+export interface NotificationSettings {
+  pushEnabled: boolean;
+  soundEnabled: boolean;
+  soundChoice: NotificationSoundChoice;
+  wakeDeviceEnabled: boolean;
+  topBarTileEnabled: boolean;
+  vibrateEnabled: boolean;
+  silentMode: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -25,6 +37,7 @@ export interface User {
   subscriptionStatus?: SubscriptionStatus;
   subscriptionRenewsAt?: number;
   subscriptionAutoRenew?: boolean;
+  notificationSettings?: NotificationSettings;
 }
 
 export type PropertyType =

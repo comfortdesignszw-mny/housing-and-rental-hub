@@ -5,6 +5,7 @@ import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { offlineSyncService } from '../../services/offlineSync';
 import { useAuth } from '../../context/AuthContext';
+import { notificationService } from '../../services/notificationService';
 import { X, CheckCircle2, MessageCircle } from 'lucide-react';
 
 interface RentalApplicationModalProps {
@@ -192,6 +193,9 @@ export const RentalApplicationModal: React.FC<RentalApplicationModalProps> = ({
     } catch (notifErr) {
       console.warn('Could not post notification to Firestore:', notifErr);
     }
+
+    // Trigger audible notification, wake device & top bar tile
+    notificationService.dispatchNotification(landlordNotification);
 
     // 4. Format WhatsApp message with full details
     let waText = '';

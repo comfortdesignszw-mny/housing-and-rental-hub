@@ -36,6 +36,11 @@ import {
   BellOff,
   Crown,
   Calendar,
+  Volume2,
+  VolumeX,
+  Zap,
+  LayoutTemplate,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { UserRole, User, PropertyNeeded } from '../../types';
 import { compressImage } from '../../services/imageCompression';
@@ -47,6 +52,8 @@ import { DeleteAccountModal } from './DeleteAccountModal';
 import { RestoreAccountModal } from './RestoreAccountModal';
 import { RenewalTermsModal } from '../legal/RenewalTermsModal';
 import { CopyrightAgentModal } from '../legal/CopyrightAgentModal';
+import { NotificationSettingsModal } from '../notifications/NotificationSettingsModal';
+import { notificationService } from '../../services/notificationService';
 import {
   exportAccountData,
   downloadAccountDataFile,
@@ -174,9 +181,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     );
   };
 
-  // Renewal Terms & Copyright Agent modals state
+  // Renewal Terms, Copyright Agent & Notification Settings modals state
   const [showRenewalTermsModal, setShowRenewalTermsModal] = useState(false);
   const [showCopyrightAgentModal, setShowCopyrightAgentModal] = useState(false);
+  const [showNotificationSettingsModal, setShowNotificationSettingsModal] = useState(false);
 
   // Unsubscribe & Notification alerts toggle handlers
   const handleToggleWhatsappAlerts = async () => {
@@ -266,12 +274,23 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     setEditCity(currentUser.city || 'Harare');
     setEditBio(currentUser.bio || '');
     setEditAvatar(currentUser.avatar || '');
+    setEditBirthDate(currentUser.birthDate || '');
     setShowEditProfileModal(true);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+
+    let calculatedAge: number | undefined = undefined;
+    if (editBirthDate) {
+      const userAge = calculateAge(editBirthDate);
+      if (userAge <= 16) {
+        showToast('Age Restriction: You must be above 16 years old. Juveniles must have a parent or guardian control the account.');
+        return;
+      }
+      calculatedAge = userAge;
+    }
 
     const newPhone = editPhone.trim();
     const newWhatsapp = editWhatsapp.trim() || newPhone;
@@ -283,6 +302,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       city: editCity.trim(),
       bio: editBio.trim(),
       avatar: editAvatar.trim(),
+      birthDate: editBirthDate || undefined,
+      age: calculatedAge !== undefined ? calculatedAge : currentUser.age,
+      ageConfirmed: true,
     });
 
     // Sync updated WhatsApp number to all properties published by this user
@@ -533,6 +555,23 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     <span>{currentUser.phone}</span>
                   </>
                 )}
+                {currentUser?.age ? (
+                  <>
+                    <span>•</span>
+                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      <span>{currentUser.age} yrs • Age Verified (Above 16)</span>
+                    </span>
+                  </>
+                ) : currentUser?.birthDate ? (
+                  <>
+                    <span>•</span>
+                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      <span>Age Verified (Above 16)</span>
+                    </span>
+                  </>
+                ) : null}
               </p>
               <p className="text-[11px] text-slate-400">
                 Location: {currentUser?.city || 'Harare, Zimbabwe'}
@@ -1328,6 +1367,104 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Advanced Notification Options: Sound, Silent, Wake Device & Top Bar Tile */}
+          <div className="pt-3 border-t border-slate-200 bg-slate-50 p-4 rounded-xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-extrabold text-xs text-slate-900">
+                    Push Notifications, Alert Sounds, Wake Device & Top Bar Tile
+                  </h4>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                    Total Device Control
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Choose notification options suitable for you: silent mode, sound chimes, screen wake, and floating top bar notification tile.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowNotificationSettingsModal(true)}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Configure Options</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await notificationService.dispatchNotification({
+                      id: `test_profile_${Date.now()}`,
+                      title: 'Comfort Housing Hub Alert',
+                      message: 'Verified notification test: Chime sound, screen wake, and top bar notification tile active!',
+                      type: 'property_match',
+                      actionUrl: 'listings',
+                      timestamp: Date.now(),
+                    });
+                    showToast('Notification test triggered: Playing chime, waking screen & dropping top bar tile.');
+                  }}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Test Alert
+                </button>
+              </div>
+            </div>
+
+            {/* Quick status indicators */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+              <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5">
+                {notificationService.getSettings().silentMode ? (
+                  <VolumeX className="w-3.5 h-3.5 text-rose-600" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5 text-emerald-600" />
+                )}
+                <span>
+                  <strong>Alert Mode:</strong>{' '}
+                  {notificationService.getSettings().silentMode ? 'Silent' : 'Sound On'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5">
+                <Zap
+                  className={`w-3.5 h-3.5 ${
+                    notificationService.getSettings().wakeDeviceEnabled
+                      ? 'text-amber-600 fill-amber-500'
+                      : 'text-slate-400'
+                  }`}
+                />
+                <span>
+                  <strong>Wake Device:</strong>{' '}
+                  {notificationService.getSettings().wakeDeviceEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5">
+                <LayoutTemplate
+                  className={`w-3.5 h-3.5 ${
+                    notificationService.getSettings().topBarTileEnabled
+                      ? 'text-teal-600'
+                      : 'text-slate-400'
+                  }`}
+                />
+                <span>
+                  <strong>Top Bar Tile:</strong>{' '}
+                  {notificationService.getSettings().topBarTileEnabled ? 'Active' : 'Muted'}
+                </span>
+              </div>
+
+              <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5 text-indigo-600" />
+                <span>
+                  <strong>Tone:</strong>{' '}
+                  <span className="capitalize">{notificationService.getSettings().soundChoice}</span>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1579,6 +1716,41 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 />
               </div>
 
+              {/* Date of Birth & Age Gate */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block font-semibold text-slate-700">
+                    Date of Birth (Age Gate: Above 16 Only)
+                  </label>
+                  {editBirthDate && (
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        calculateAge(editBirthDate) > 16
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {calculateAge(editBirthDate)} yrs old
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="date"
+                    max={new Date().toISOString().split('T')[0]}
+                    value={editBirthDate}
+                    onChange={e => setEditBirthDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium"
+                  />
+                </div>
+                {editBirthDate && calculateAge(editBirthDate) <= 16 && (
+                  <p className="text-[10px] text-rose-600 font-semibold pt-0.5">
+                    Age restriction: Must be above 16 years old. Juveniles must have their guardian create and control their account instead.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   Bio / About
@@ -1644,6 +1816,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         <CopyrightAgentModal
           isOpen={showCopyrightAgentModal}
           onClose={() => setShowCopyrightAgentModal(false)}
+        />
+      )}
+
+      {/* Notification Options & Alert Settings Modal */}
+      {showNotificationSettingsModal && (
+        <NotificationSettingsModal
+          isOpen={showNotificationSettingsModal}
+          onClose={() => setShowNotificationSettingsModal(false)}
+          onSaved={() => showToast('Notification options updated successfully!')}
         />
       )}
     </div>

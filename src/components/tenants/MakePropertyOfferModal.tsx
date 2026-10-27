@@ -4,8 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import { db } from '../../db/db';
 import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
 import { doc, setDoc, updateDoc, increment } from 'firebase/firestore';
-import { offlineSyncService } from '../../services/offlineSync';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { offlineSyncService } from '../../services/offlineSync';
+import { notificationService } from '../../services/notificationService';
 import {
   X,
   Building2,
@@ -191,6 +192,9 @@ export const MakePropertyOfferModal: React.FC<MakePropertyOfferModalProps> = ({
       } catch (notifErr) {
         console.warn('Could not post offer notification to Firestore online:', notifErr);
       }
+
+      // Dispatch alert with sound, wake device & top bar tile
+      notificationService.dispatchNotification(tenantNotification);
 
       setSentSuccess(true);
       if (onOfferSent) {
