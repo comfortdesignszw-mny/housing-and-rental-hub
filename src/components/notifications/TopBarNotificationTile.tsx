@@ -13,6 +13,8 @@ import {
   DollarSign,
   AlertTriangle,
   Sparkles,
+  Star,
+  Heart,
 } from 'lucide-react';
 import { notificationService, TopBarTileData } from '../../services/notificationService';
 
@@ -80,6 +82,10 @@ export const TopBarNotificationTile: React.FC<TopBarNotificationTileProps> = ({
 
   const getCategoryBadge = () => {
     switch (activeTile.type) {
+      case 'property_rating':
+        return { label: 'Property Rating ★', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40', icon: Star };
+      case 'property_favorite':
+        return { label: 'Listing Saved ❤️', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40', icon: Heart };
       case 'property_offer':
         return { label: 'Property Owner Offer', color: 'bg-teal-500/20 text-teal-300 border-teal-500/40', icon: Home };
       case 'message':

@@ -361,6 +361,8 @@ export interface NotificationItem {
     | 'application_update'
     | 'maintenance_update'
     | 'property_offer'
+    | 'property_rating'
+    | 'property_favorite'
     | 'message';
   read: boolean;
   timestamp: number;

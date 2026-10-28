@@ -27,6 +27,8 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
 import { offlineSyncService } from '../../services/offlineSync';
+import { NotificationItem } from '../../types';
+import { notificationService } from '../../services/notificationService';
 
 interface MessagingHubProps {
   initialRecipientId?: string | null;
@@ -254,7 +256,19 @@ export const MessagingHub: React.FC<MessagingHubProps> = ({
           lastMessageTime: Date.now(),
           lastMessagePreview: rawContent.substring(0, 100),
         });
-        await setDoc(doc(firestoreDb, 'conversations', convId), cleanConv, { merge: true });
+        // Send in-app notification alert to the recipient so push/sound/tile triggers
+        const notifId = `notif_msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const msgNotif: NotificationItem = {
+          id: notifId,
+          userId: activeRecipientId,
+          title: `Message from ${currentUser.name || 'Resident'}`,
+          message: rawContent ? (rawContent.length > 80 ? `${rawContent.substring(0, 80)}...` : rawContent) : 'Sent a photo or voice note.',
+          type: 'message',
+          read: false,
+          timestamp: Date.now(),
+          actionUrl: `messages?user=${currentUser.id}&name=${encodeURIComponent(currentUser.name || 'Resident')}`,
+        };
+        await setDoc(doc(firestoreDb, 'notifications', notifId), sanitizeForFirestore(msgNotif));
       } catch (err) {
         console.warn('Direct firestore send failed, enqueueing offline:', err);
         await offlineSyncService.enqueueAction('send_message', newMsg);
@@ -423,8 +437,8 @@ export const MessagingHub: React.FC<MessagingHubProps> = ({
                     </p>
                   </div>
                   {conv.unread > 0 && (
-                    <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[9px] font-bold flex items-center justify-center shrink-0">
-                      {conv.unread}
+                    <span className="min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-xs ring-2 ring-white animate-pulse">
+                      {conv.unread > 9 ? '9+' : conv.unread}
                     </span>
                   )}
                 </button>

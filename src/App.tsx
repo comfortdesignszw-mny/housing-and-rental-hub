@@ -25,9 +25,12 @@ import { RenewalTermsModal } from './components/legal/RenewalTermsModal';
 import { CopyrightAgentModal } from './components/legal/CopyrightAgentModal';
 import { TopBarNotificationTile } from './components/notifications/TopBarNotificationTile';
 import { NotificationSettingsModal } from './components/notifications/NotificationSettingsModal';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from './db/db';
+import { notificationService } from './services/notificationService';
 
 function MainAppContent() {
-  const { isGuest } = useAuth();
+  const { isGuest, currentUser } = useAuth();
   const [currentTab, setCurrentTab] = useState<NavTab>('listings');
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [showCreatePropertyNeeded, setShowCreatePropertyNeeded] = useState(false);
@@ -45,6 +48,38 @@ function MainAppContent() {
   const [chatRecipientId, setChatRecipientId] = useState<string | null>(null);
   const [chatRecipientName, setChatRecipientName] = useState<string | null>(null);
   const [chatPropertyId, setChatPropertyId] = useState<string | null>(null);
+
+  // Real-time unread messages & notification counters across the application
+  const unreadNotifsCount = useLiveQuery(
+    async () => {
+      if (!currentUser || isGuest) return 0;
+      return db.notifications
+        .filter(n => n.userId === currentUser.id && !n.read)
+        .count();
+    },
+    [currentUser?.id, isGuest]
+  ) || 0;
+
+  const unreadMsgsCount = useLiveQuery(
+    async () => {
+      if (!currentUser || isGuest) return 0;
+      return db.messages
+        .where('recipientId')
+        .equals(currentUser.id)
+        .filter(m => m.status !== 'read')
+        .count();
+    },
+    [currentUser?.id, isGuest]
+  ) || 0;
+
+  const totalUnreadCount = unreadNotifsCount + unreadMsgsCount;
+
+  // Sync native app badge icon counter and page title so users see unread counts even when app is closed or on phone launcher
+  useEffect(() => {
+    notificationService.updateBadge(totalUnreadCount);
+    const baseTitle = 'Comfort Housing and Rental Hub';
+    document.title = totalUnreadCount > 0 ? `(${totalUnreadCount}) ${baseTitle}` : baseTitle;
+  }, [totalUnreadCount]);
 
   const handleStartChat = (
     recipientId: string,
@@ -137,6 +172,13 @@ function MainAppContent() {
       <Header
         onOpenNotifications={() => setShowNotifications(true)}
         onOpenNotificationSettings={() => setShowNotificationSettings(true)}
+        onOpenMessages={() => {
+          if (isGuest) {
+            setShowAuthModal(true);
+          } else {
+            setCurrentTab('messages');
+          }
+        }}
         onOpenCreateListing={handleOpenCreateListing}
         onOpenCreatePropertyNeeded={handleOpenCreatePropertyNeeded}
         onOpenAuthModal={() => setShowAuthModal(true)}

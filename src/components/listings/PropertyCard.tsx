@@ -23,6 +23,10 @@ import { useAuth } from '../../context/AuthContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { recordPropertyView } from '../../services/statsService';
 import { ShareModal } from '../common/ShareModal';
+import { NotificationItem } from '../../types';
+import { doc, setDoc } from 'firebase/firestore';
+import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
+import { notificationService } from '../../services/notificationService';
 
 interface PropertyCardProps {
   property: Property;
@@ -77,6 +81,36 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         userId: currentUser.id,
         propertyId: property.id,
         savedAt: Date.now(),
+      });
+
+      // Trigger notification alert to property listings owner
+      const notifId = `notif_fav_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const senderName = currentUser.name || 'A prospective tenant/seeker';
+      const notifItem: NotificationItem = {
+        id: notifId,
+        userId: property.landlordId,
+        title: `Property Favorited: ${property.name}`,
+        message: `${senderName} saved your listing "${property.name}" to their favorites.`,
+        type: 'property_favorite',
+        read: false,
+        timestamp: Date.now(),
+        actionUrl: `listings?propertyId=${property.id}`,
+      };
+
+      try {
+        await db.notifications.put(notifItem);
+        await setDoc(doc(firestoreDb, 'notifications', notifId), sanitizeForFirestore(notifItem));
+      } catch (err) {
+        console.warn('Could not post favorite notification to Firestore:', err);
+      }
+
+      notificationService.dispatchNotification({
+        id: notifId,
+        title: notifItem.title,
+        message: notifItem.message,
+        type: 'property_favorite',
+        actionUrl: notifItem.actionUrl,
+        timestamp: notifItem.timestamp,
       });
     }
   };

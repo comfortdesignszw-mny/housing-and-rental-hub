@@ -20,6 +20,8 @@ import {
   ExternalLink,
   MailCheck,
   SlidersHorizontal,
+  Star,
+  Heart,
 } from 'lucide-react';
 
 interface NotificationsDrawerProps {
@@ -110,6 +112,10 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
 
   const getIcon = (type: NotificationItem['type']) => {
     switch (type) {
+      case 'property_rating':
+        return <Star className="w-4 h-4 text-amber-500 fill-amber-400" />;
+      case 'property_favorite':
+        return <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />;
       case 'property_offer':
         return <Sparkles className="w-4 h-4 text-teal-600" />;
       case 'rent_due':
@@ -129,6 +135,10 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
 
   const getTypeLabel = (type: NotificationItem['type']) => {
     switch (type) {
+      case 'property_rating':
+        return 'Property Rating';
+      case 'property_favorite':
+        return 'Listing Saved';
       case 'property_offer':
         return 'Property Offer';
       case 'rent_due':

@@ -1,6 +1,9 @@
 // Background Service Worker notification handling for Comfort Housing and Rental Hub
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  if (self.navigator && 'clearAppBadge' in self.navigator) {
+    self.navigator.clearAppBadge().catch(() => {});
+  }
   const data = event.notification.data || {};
   const targetUrl = data.actionUrl || '/';
 
@@ -20,6 +23,9 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 self.addEventListener('push', (event) => {
+  if (self.navigator && 'setAppBadge' in self.navigator) {
+    self.navigator.setAppBadge().catch(() => {});
+  }
   if (!event.data) return;
   try {
     const payload = event.data.json();

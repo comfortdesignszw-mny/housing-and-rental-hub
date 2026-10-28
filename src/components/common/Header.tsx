@@ -14,6 +14,7 @@ import {
   Volume2,
   VolumeX,
   Zap,
+  MessageSquare,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -26,6 +27,7 @@ interface HeaderProps {
   onOpenCreatePropertyNeeded?: () => void;
   onOpenAuthModal?: () => void;
   onOpenNotificationSettings?: () => void;
+  onOpenMessages?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -34,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCreatePropertyNeeded,
   onOpenAuthModal,
   onOpenNotificationSettings,
+  onOpenMessages,
 }) => {
   const { currentUser, role, isGuest, isAuthenticated, logout } = useAuth();
   const isOnline = useOnlineStatus();
@@ -57,6 +60,18 @@ export const Header: React.FC<HeaderProps> = ({
       if (!currentUser || isGuest) return 0;
       return db.notifications
         .filter(n => n.userId === currentUser.id && !n.read)
+        .count();
+    },
+    [currentUser?.id, isGuest]
+  ) || 0;
+
+  const unreadMessagesCount = useLiveQuery(
+    async () => {
+      if (!currentUser || isGuest) return 0;
+      return db.messages
+        .where('recipientId')
+        .equals(currentUser.id)
+        .filter(m => m.status !== 'read')
         .count();
     },
     [currentUser?.id, isGuest]
@@ -135,6 +150,22 @@ export const Header: React.FC<HeaderProps> = ({
             />
             <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
           </div>
+
+          {/* Direct Messages with Red Unread Counter */}
+          {!isGuest && onOpenMessages && (
+            <button
+              onClick={onOpenMessages}
+              className="relative p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition active:scale-95 cursor-pointer"
+              title="Direct In-App Messages"
+            >
+              <MessageSquare className="w-4 h-4" />
+              {unreadMessagesCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs ring-2 ring-white animate-pulse">
+                  {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Notifications Bell */}
           <button

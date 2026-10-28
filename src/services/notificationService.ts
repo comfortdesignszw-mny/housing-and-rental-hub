@@ -476,7 +476,23 @@ class NotificationEngine {
   }
 
   /**
-   * Clear app badge from device status bar
+   * Update or set app badge count on the device app launcher icon
+   * Displays red notification counter on Android / Windows / PWA app icon
+   */
+  public async updateBadge(count: number): Promise<void> {
+    try {
+      if (typeof navigator !== 'undefined') {
+        if (count > 0 && 'setAppBadge' in navigator) {
+          await (navigator as any).setAppBadge(count);
+        } else if ('clearAppBadge' in navigator) {
+          await (navigator as any).clearAppBadge();
+        }
+      }
+    } catch {}
+  }
+
+  /**
+   * Clear app badge from device status bar and app launcher icon
    */
   public async clearBadge(): Promise<void> {
     try {

@@ -23,12 +23,17 @@ import {
   Home,
   Briefcase,
   ShieldAlert,
+  Heart,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../db/db';
 import { offlineSyncService } from '../../services/offlineSync';
 import { recordPropertyView, recordPropertyRating } from '../../services/statsService';
 import { ShareModal } from '../common/ShareModal';
+import { NotificationItem } from '../../types';
+import { doc, setDoc } from 'firebase/firestore';
+import { db as firestoreDb, sanitizeForFirestore } from '../../db/firebase';
+import { notificationService } from '../../services/notificationService';
 
 interface PropertyDetailsProps {
   property: Property;
@@ -69,6 +74,76 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
   const [monthsAdvance, setMonthsAdvance] = useState(1);
   const totalMoveInCost = currentProp.depositUsd + currentProp.rentUsd * monthsAdvance;
 
+  // Real-time favorite status for this listing
+  const isFavorited = useLiveQuery(
+    async () => {
+      if (!currentUser) return false;
+      const record = await db.savedProperties
+        .where('userId')
+        .equals(currentUser.id)
+        .filter(s => s.propertyId === property.id)
+        .first();
+      return !!record;
+    },
+    [currentUser?.id, property.id]
+  );
+
+  const handleToggleFavorite = async () => {
+    if (!currentUser) {
+      showToast('Please sign in or create an account to save properties.');
+      return;
+    }
+
+    const existing = await db.savedProperties
+      .where('userId')
+      .equals(currentUser.id)
+      .filter(s => s.propertyId === property.id)
+      .first();
+
+    if (existing) {
+      await db.savedProperties.delete(existing.id);
+      showToast('Removed from saved properties.');
+    } else {
+      await db.savedProperties.add({
+        id: `saved_${Date.now()}_${property.id}`,
+        userId: currentUser.id,
+        propertyId: property.id,
+        savedAt: Date.now(),
+      });
+      showToast('Saved to your favorites!');
+
+      // Trigger notification alert to property owner
+      const notifId = `notif_fav_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const senderName = currentUser.name || 'A prospective tenant/seeker';
+      const notifItem: NotificationItem = {
+        id: notifId,
+        userId: property.landlordId,
+        title: `Property Favorited: ${property.name}`,
+        message: `${senderName} saved your listing "${property.name}" to their favorites.`,
+        type: 'property_favorite',
+        read: false,
+        timestamp: Date.now(),
+        actionUrl: `listings?propertyId=${property.id}`,
+      };
+
+      try {
+        await db.notifications.put(notifItem);
+        await setDoc(doc(firestoreDb, 'notifications', notifId), sanitizeForFirestore(notifItem));
+      } catch (err) {
+        console.warn('Could not post favorite notification to Firestore:', err);
+      }
+
+      notificationService.dispatchNotification({
+        id: notifId,
+        title: notifItem.title,
+        message: notifItem.message,
+        type: 'property_favorite',
+        actionUrl: notifItem.actionUrl,
+        timestamp: notifItem.timestamp,
+      });
+    }
+  };
+
   const handleRatingSubmit = async (stars: number) => {
     setUserRating(stars);
     const prevRating = currentProp.rating || 0;
@@ -78,6 +153,36 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
 
     await recordPropertyRating(property.id, updatedRating, newCount);
     showToast(`Real rating recorded! You rated ${stars} stars.`);
+
+    // Trigger notification to property owner
+    const notifId = `notif_rate_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const raterName = currentUser?.name || 'A prospective tenant/seeker';
+    const notifItem: NotificationItem = {
+      id: notifId,
+      userId: property.landlordId,
+      title: `Property Rating: ${stars} Stars`,
+      message: `${raterName} rated "${property.name}" ${stars}★ (New Average: ${updatedRating}★, Total: ${newCount}).`,
+      type: 'property_rating',
+      read: false,
+      timestamp: Date.now(),
+      actionUrl: `listings?propertyId=${property.id}`,
+    };
+
+    try {
+      await db.notifications.put(notifItem);
+      await setDoc(doc(firestoreDb, 'notifications', notifId), sanitizeForFirestore(notifItem));
+    } catch (err) {
+      console.warn('Could not post rating notification to Firestore:', err);
+    }
+
+    notificationService.dispatchNotification({
+      id: notifId,
+      title: notifItem.title,
+      message: notifItem.message,
+      type: 'property_rating',
+      actionUrl: notifItem.actionUrl,
+      timestamp: notifItem.timestamp,
+    });
   };
 
   const handleShare = () => {
@@ -117,6 +222,17 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleToggleFavorite}
+              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                isFavorited
+                  ? 'text-rose-500 bg-rose-500/20 hover:bg-rose-500/30'
+                  : 'text-slate-300 hover:text-rose-400 hover:bg-slate-800'
+              }`}
+              title={isFavorited ? 'Remove from favorites' : 'Save to favorites'}
+            >
+              <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500 text-rose-500' : ''}`} />
+            </button>
             <button
               onClick={handleShare}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition"
