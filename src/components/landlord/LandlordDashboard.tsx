@@ -566,9 +566,12 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
                   className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition cursor-pointer"
                 >
                   <img
-                    src={p.photos[0]}
+                    src={p.photos?.[0] || '/icon.svg'}
                     alt={p.name}
-                    className="w-14 h-14 rounded-lg object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/icon.svg';
+                    }}
+                    className={`w-14 h-14 rounded-lg ${(p.photos?.[0] || '/icon.svg') === '/icon.svg' ? 'object-contain p-1.5 bg-white border border-slate-200' : 'object-cover'}`}
                   />
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-slate-900 text-xs truncate">
@@ -685,10 +688,13 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
                   >
                     <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
                       <img
-                        src={property.photos[0]}
+                        src={property.photos?.[0] || '/icon.svg'}
                         alt={property.name}
                         onClick={() => setPreviewingProperty(property)}
-                        className="w-20 h-20 rounded-xl object-cover shrink-0 cursor-pointer hover:opacity-90 transition"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = '/icon.svg';
+                        }}
+                        className={`w-20 h-20 rounded-xl ${(property.photos?.[0] || '/icon.svg') === '/icon.svg' ? 'object-contain p-2 bg-slate-50 border border-slate-200' : 'object-cover'} shrink-0 cursor-pointer hover:opacity-90 transition`}
                         title="Click to view details"
                       />
 

@@ -259,37 +259,54 @@ export const PropertyDetails: React.FC<PropertyDetailsProps> = ({
         {/* Scrollable Body */}
         <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-6">
           {/* Photos Gallery */}
-          <div className="space-y-2">
-            <div className="relative aspect-[16/10] sm:aspect-[21/9] w-full rounded-2xl overflow-hidden bg-slate-100">
-              <img
-                src={property.photos[activePhotoIdx] || property.photos[0]}
-                alt={property.name}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-xs text-white text-[11px] px-2 py-0.5 rounded-lg font-medium">
-                {activePhotoIdx + 1} / {property.photos.length}
-              </div>
-            </div>
+          {(() => {
+            const safePhotos = property.photos && property.photos.length > 0 ? property.photos : ['/icon.svg'];
+            const currentPhoto = safePhotos[activePhotoIdx] || safePhotos[0] || '/icon.svg';
+            const isPlaceholder = currentPhoto === '/icon.svg';
+            return (
+              <div className="space-y-2">
+                <div className={`relative aspect-[16/10] sm:aspect-[21/9] w-full rounded-2xl overflow-hidden ${isPlaceholder ? 'bg-slate-50 flex items-center justify-center' : 'bg-slate-100'}`}>
+                  <img
+                    src={currentPhoto}
+                    alt={property.name}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/icon.svg';
+                    }}
+                    className={`w-full h-full ${isPlaceholder ? 'object-contain p-8 max-h-72' : 'object-cover'}`}
+                  />
+                  <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-xs text-white text-[11px] px-2 py-0.5 rounded-lg font-medium">
+                    {Math.min(activePhotoIdx + 1, safePhotos.length)} / {safePhotos.length}
+                  </div>
+                </div>
 
-            {/* Thumbnail Strip */}
-            {property.photos.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {property.photos.map((url, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setActivePhotoIdx(i)}
-                    className={`relative w-16 h-12 rounded-lg overflow-hidden shrink-0 border-2 transition ${
-                      activePhotoIdx === i
-                        ? 'border-emerald-600 scale-102'
-                        : 'border-transparent opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
+                {/* Thumbnail Strip */}
+                {safePhotos.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {safePhotos.map((url, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setActivePhotoIdx(i)}
+                        className={`relative w-16 h-12 rounded-lg overflow-hidden shrink-0 border-2 transition ${
+                          activePhotoIdx === i
+                            ? 'border-emerald-600 scale-102'
+                            : 'border-transparent opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <img
+                          src={url}
+                          alt=""
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = '/icon.svg';
+                          }}
+                          className={`w-full h-full ${url === '/icon.svg' ? 'object-contain p-1' : 'object-cover'}`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Key Title & Pricing Header */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-slate-200">

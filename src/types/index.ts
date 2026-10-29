@@ -52,15 +52,34 @@ export type PropertyType =
   | 'Commercial Property'
   | 'Office'
   | 'Warehouse'
-  | 'Land';
+  | 'Land'
+  | 'Other'
+  | (string & {});
 
 export type AvailabilityStatus = 'Immediate' | 'Next Month' | 'From Date' | 'Occupied';
 
-export type RentBasis = 'per month' | 'per room' | 'per house' | 'per space' | 'per bed';
+export type RentBasis =
+  | 'per month'
+  | 'per room'
+  | 'per house'
+  | 'per space'
+  | 'per bed'
+  | 'per semester / term'
+  | 'per week'
+  | 'per day'
+  | 'Other'
+  | (string & {});
 
 export type ListingCategory = 'rental' | 'sale';
 
-export type SalePaymentType = 'Once off payment' | 'Installments' | 'Negotiable';
+export type SalePaymentType =
+  | 'Once off payment'
+  | 'Installments'
+  | 'Negotiable'
+  | 'Payment terms accepted'
+  | 'Mortgage / Bank Finance'
+  | 'Other'
+  | (string & {});
 
 export interface Property {
   id: string;

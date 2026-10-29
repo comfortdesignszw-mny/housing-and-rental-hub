@@ -114,7 +114,8 @@ service cloud.firestore {
         (!('rentUsd' in data) || (data.rentUsd is number && data.rentUsd >= 0)) &&
         (!('askingPriceUsd' in data) || (data.askingPriceUsd is number && data.askingPriceUsd >= 0)) &&
         (!('listingCategory' in data) || data.listingCategory in ['rental', 'sale']) &&
-        (!('paymentType' in data) || data.paymentType in ['Once off payment', 'Once off purchase', 'Installments', 'Negotiable']) &&
+        (!('paymentType' in data) || (data.paymentType is string && data.paymentType.size() <= 100)) &&
+        (!('rentBasis' in data) || (data.rentBasis is string && data.rentBasis.size() <= 100)) &&
         data.city is string && data.city.size() <= 50 &&
         data.suburb is string && data.suburb.size() <= 100 &&
         data.createdAt is number && data.updatedAt is number &&

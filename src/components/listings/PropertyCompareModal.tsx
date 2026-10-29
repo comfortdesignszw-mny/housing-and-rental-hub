@@ -110,9 +110,12 @@ export const PropertyCompareModal: React.FC<PropertyCompareModalProps> = ({
                     <X className="w-3.5 h-3.5" />
                   </button>
                   <img
-                    src={p.photos[0]}
+                    src={p.photos?.[0] || '/icon.svg'}
                     alt={p.name}
-                    className="w-full h-24 object-cover rounded-lg mb-2"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/icon.svg';
+                    }}
+                    className={`w-full h-24 ${(p.photos?.[0] || '/icon.svg') === '/icon.svg' ? 'object-contain p-2 bg-slate-50' : 'object-cover'} rounded-lg mb-2`}
                   />
                   <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{p.name}</h4>
                   <p className="text-xs text-slate-500">{p.suburb}, {p.city}</p>

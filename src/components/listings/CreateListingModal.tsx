@@ -29,6 +29,8 @@ import {
   Briefcase,
   DollarSign,
   ShieldAlert,
+  Plus,
+  Sparkles,
 } from 'lucide-react';
 
 interface CreateListingModalProps {
@@ -124,6 +126,26 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
   const [compressStats, setCompressStats] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [publishSuccess, setPublishSuccess] = useState<boolean>(false);
+  const [lastPublishedName, setLastPublishedName] = useState<string>('');
+  const [customPropertyType, setCustomPropertyType] = useState<string>(
+    propertyToEdit && !['House', 'Flat', 'Apartment', 'Cottage', 'Room', 'Shared Room', 'Student Accommodation', 'Boarding House', 'Commercial Property', 'Office', 'Warehouse', 'Land'].includes(propertyToEdit.propertyType)
+      ? propertyToEdit.propertyType
+      : ''
+  );
+  const [customRentBasis, setCustomRentBasis] = useState<string>(
+    propertyToEdit && propertyToEdit.rentBasis && !['per month', 'per room', 'per house', 'per space', 'per bed', 'per semester / term', 'per week', 'per day'].includes(propertyToEdit.rentBasis)
+      ? propertyToEdit.rentBasis
+      : ''
+  );
+  const [customPaymentType, setCustomPaymentType] = useState<string>(
+    propertyToEdit && propertyToEdit.paymentType && !['Once off payment', 'Installments', 'Negotiable', 'Payment terms accepted', 'Mortgage / Bank Finance'].includes(propertyToEdit.paymentType)
+      ? propertyToEdit.paymentType
+      : ''
+  );
+  const [showCustomAmenityInput, setShowCustomAmenityInput] = useState<boolean>(false);
+  const [customAmenityText, setCustomAmenityText] = useState<string>('');
+
   const propertyTypes: PropertyType[] = [
     'House',
     'Flat',
@@ -137,7 +159,71 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     'Office',
     'Warehouse',
     'Land',
+    'Other',
   ];
+
+  const rentBasisOptions: RentBasis[] = [
+    'per month',
+    'per room',
+    'per house',
+    'per space',
+    'per bed',
+    'per semester / term',
+    'per week',
+    'per day',
+    'Other',
+  ];
+
+  const salePaymentTypes: SalePaymentType[] = [
+    'Once off payment',
+    'Installments',
+    'Negotiable',
+    'Payment terms accepted',
+    'Mortgage / Bank Finance',
+    'Other',
+  ];
+
+  const resetForm = () => {
+    setName('');
+    setPropertyType('House');
+    setCustomPropertyType('');
+    setRoomsAvailable(1);
+    setRentUsd(350);
+    setRentBasis('per month');
+    setCustomRentBasis('');
+    setDepositUsd(350);
+    setAskingPriceUsd(55000);
+    setPaymentType('Once off payment');
+    setCustomPaymentType('');
+    setIsAgentListing(isUserAgent);
+    setAgentFeeUsd(0);
+    setSelectedProvince('Harare');
+    setSelectedCity('Harare');
+    setSelectedSuburb('Avondale');
+    setCustomSuburb('');
+    setAddress('');
+    setBedrooms(3);
+    setBathrooms(2);
+    setAvailability('Immediate');
+    setAvailableDate('2026-10-01');
+    setDescription('');
+    setAmenities([]);
+    setCustomAmenityInput('');
+    setCustomAmenityText('');
+    setShowCustomAmenityInput(false);
+    setPhotos([]);
+    setCompressStats('');
+    setFormError(null);
+  };
+
+  const handleAddCustomAmenity = () => {
+    const trimmed = customAmenityText.trim();
+    if (trimmed && !amenities.includes(trimmed)) {
+      setAmenities(prev => [...prev, trimmed]);
+      setCustomAmenityText('');
+      setShowCustomAmenityInput(false);
+    }
+  };
 
   const commonAmenitiesList = [
     'Solar Power',
@@ -252,6 +338,21 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
     const propertyId = propertyToEdit ? propertyToEdit.id : `prop_${Date.now()}`;
 
+    const finalPropertyType =
+      propertyType === 'Other'
+        ? (customPropertyType.trim() || 'Other')
+        : propertyType;
+
+    const finalRentBasis =
+      rentBasis === 'Other'
+        ? (customRentBasis.trim() || 'Custom Terms')
+        : rentBasis;
+
+    const finalPaymentType =
+      paymentType === 'Other'
+        ? (customPaymentType.trim() || 'Custom Terms')
+        : paymentType;
+
     const propertyData: Property = {
       id: propertyId,
       landlordId: currentUser.id,
@@ -259,17 +360,17 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
       landlordPhone: currentUser.phone,
       landlordEmail: currentUser.email,
       name,
-      propertyType,
+      propertyType: finalPropertyType,
       listingCategory,
       askingPriceUsd: listingCategory === 'sale' ? Number(askingPriceUsd) : undefined,
-      paymentType: listingCategory === 'sale' ? paymentType : undefined,
+      paymentType: listingCategory === 'sale' ? finalPaymentType : undefined,
       roomsAvailable:
         propertyType === 'Room' || propertyType === 'Shared Room'
           ? Number(roomsAvailable)
           : undefined,
       rentUsd: basePrice,
       rentZig,
-      rentBasis: listingCategory === 'rental' ? rentBasis : undefined,
+      rentBasis: listingCategory === 'rental' ? finalRentBasis : undefined,
       depositUsd: listingCategory === 'rental' ? Number(depositUsd) : 0,
       isAgentListing,
       agentFeeUsd: isAgentListing && agentFeeUsd > 0 ? Number(agentFeeUsd) : undefined,
@@ -285,9 +386,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
       photos:
         photos.length > 0
           ? photos
-          : [
-              'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&auto=format&fit=crop&q=80',
-            ],
+          : ['/icon.svg'],
       amenities,
       description,
       availability,
@@ -337,8 +436,61 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     });
 
     onCreated(propertyData);
-    onClose();
+    setLastPublishedName(name);
+    resetForm();
+    setPublishSuccess(true);
   };
+
+  // Visual Confirmation Screen (Requirement 1: green check mark with message and resolve to blank form)
+  if (publishSuccess) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 sm:p-4 backdrop-blur-xs overflow-y-auto">
+        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200 my-auto border border-emerald-200 text-center">
+          {/* Green Checkmark */}
+          <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto ring-8 ring-emerald-50 shadow-sm animate-in zoom-in-75 duration-300">
+            <CheckCircle2 className="w-12 h-12 stroke-[2.5]" />
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
+              Success! Your Property is successfully saved to the Listings
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+              {lastPublishedName ? `"${lastPublishedName}"` : 'Your property listing'} is now live, stored in local offline memory, and synced live across Zimbabwe.
+            </p>
+          </div>
+
+          {/* Quick Confirmation Banner */}
+          <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex items-center justify-center gap-2 text-xs text-emerald-900 font-semibold">
+            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Form resolved to blank — ready for another new listing!</span>
+          </div>
+
+          {/* Actions */}
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setPublishSuccess(false);
+                setCategoryChosen(false);
+              }}
+              className="w-full sm:w-auto px-5 py-3 bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Another New Listing</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full sm:w-auto px-5 py-3 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              Done & View Listings
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Step 0: User chooses whether they are creating a listing for sale or a rental property (Requirement 2)
   if (!categoryChosen) {
@@ -532,7 +684,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
           {/* Type & Availability */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold text-slate-800 mb-1">Property Type</label>
+              <label className="block font-bold text-slate-800 mb-1">Property Type *</label>
               <select
                 value={propertyType}
                 onChange={e => {
@@ -546,7 +698,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                     setRentBasis('per space');
                   }
                 }}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden bg-white text-xs"
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden bg-white text-xs font-semibold"
               >
                 {propertyTypes.map(t => (
                   <option key={t} value={t}>
@@ -554,6 +706,26 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   </option>
                 ))}
               </select>
+
+              {propertyType === 'Other' && (
+                <div className="mt-2 space-y-1 animate-in fade-in duration-150">
+                  <label className="block text-[11px] font-bold text-emerald-800">
+                    Specify Custom Property Type *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={
+                      listingCategory === 'sale'
+                        ? 'e.g. Commercial Plot, Agricultural Holding, Industrial Yard'
+                        : 'e.g. Workshop with Cottage, Student Cluster, Bedsitter, Single Room'
+                    }
+                    value={customPropertyType}
+                    onChange={e => setCustomPropertyType(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-emerald-50/60 border border-emerald-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                  />
+                </div>
+              )}
             </div>
 
             <div>
@@ -598,21 +770,38 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
               <div>
                 <label className="block font-bold text-emerald-950 mb-1">
-                  Rent Pricing Basis
+                  Rent Pricing Basis *
                 </label>
                 <select
                   value={rentBasis}
                   onChange={e => setRentBasis(e.target.value as RentBasis)}
                   className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-semibold text-slate-800"
                 >
-                  <option value="per month">per month</option>
-                  <option value="per room">per room</option>
-                  <option value="per house">per house</option>
-                  <option value="per space">per space</option>
-                  <option value="per bed">per bed</option>
+                  {rentBasisOptions.map(rb => (
+                    <option key={rb} value={rb}>
+                      {rb}
+                    </option>
+                  ))}
                 </select>
+
+                {rentBasis === 'Other' && (
+                  <div className="mt-2 space-y-1 animate-in fade-in duration-150">
+                    <label className="block text-[10px] font-bold text-emerald-900">
+                      Specify Custom Rent Pricing Basis *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Per Semester, Bi-monthly, Per Quarter, Per Night"
+                      value={customRentBasis}
+                      onChange={e => setCustomRentBasis(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-emerald-400 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                    />
+                  </div>
+                )}
+
                 <p className="text-[10px] text-emerald-700 mt-1 font-medium">
-                  Billed {rentBasis}
+                  Billed {rentBasis === 'Other' && customRentBasis.trim() ? customRentBasis : rentBasis}
                 </p>
               </div>
 
@@ -664,12 +853,32 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   onChange={e => setPaymentType(e.target.value as SalePaymentType)}
                   className="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-slate-800"
                 >
-                  <option value="Once off payment">Once off payment</option>
-                  <option value="Installments">Installments</option>
-                  <option value="Negotiable">Negotiable</option>
+                  {salePaymentTypes.map(pt => (
+                    <option key={pt} value={pt}>
+                      {pt}
+                    </option>
+                  ))}
                 </select>
+
+                {paymentType === 'Other' && (
+                  <div className="mt-2 space-y-1 animate-in fade-in duration-150">
+                    <label className="block text-[10px] font-bold text-amber-950">
+                      Specify Custom Payment Type / Terms *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 50% Down + 12 Month Terms, Asset Swap / Barter, Escrow"
+                      value={customPaymentType}
+                      onChange={e => setCustomPaymentType(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-amber-400 rounded-lg text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-hidden"
+                    />
+                  </div>
+                )}
+
                 <p className="text-[10px] text-amber-800 mt-1 font-medium">
-                  Terms accepted by seller: {paymentType}
+                  Terms accepted by seller:{' '}
+                  {paymentType === 'Other' && customPaymentType.trim() ? customPaymentType : paymentType}
                 </p>
               </div>
             </div>
@@ -858,11 +1067,22 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             </div>
           </div>
 
-          {/* Amenities Multi-Select */}
+          {/* Amenities Multi-Select with Other + Specify Input */}
           <div className="space-y-2">
-            <label className="block font-bold text-slate-800">
-              Verified Amenities & Features ({amenities.length} selected)
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block font-bold text-slate-800">
+                Verified Amenities & Features ({amenities.length} selected)
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowCustomAmenityInput(!showCustomAmenityInput)}
+                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Specify Other Feature</span>
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {commonAmenitiesList.map(a => {
                 const isSelected = amenities.includes(a);
@@ -882,7 +1102,77 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   </button>
                 );
               })}
+
+              {/* Other button triggering custom amenity text entry */}
+              <button
+                type="button"
+                onClick={() => setShowCustomAmenityInput(true)}
+                className={`py-1.5 px-2.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${
+                  showCustomAmenityInput
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold ring-1 ring-emerald-500'
+                    : 'border-dashed border-emerald-300 text-emerald-800 hover:bg-emerald-50/50 bg-white'
+                }`}
+              >
+                <span>Other (Specify)</span>
+                <Plus className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              </button>
             </div>
+
+            {/* Custom Amenity Specify Input Area */}
+            {showCustomAmenityInput && (
+              <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2 animate-in fade-in duration-150">
+                <label className="block text-[11px] font-bold text-emerald-900">
+                  Specify Custom Feature or Amenity *
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. Swimming Pool, Solar Geyser, Walk-in Closet, CCTV, Electric Fence"
+                    value={customAmenityText}
+                    onChange={e => setCustomAmenityText(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomAmenity();
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs outline-hidden focus:ring-2 focus:ring-emerald-500 font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomAmenity}
+                    className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition cursor-pointer shrink-0"
+                  >
+                    Add Feature
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Selected Custom Amenities chips that can be removed */}
+            {amenities.filter(a => !commonAmenitiesList.includes(a)).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-slate-400 font-semibold">Custom Added:</span>
+                {amenities
+                  .filter(a => !commonAmenitiesList.includes(a))
+                  .map(ca => (
+                    <span
+                      key={ca}
+                      className="inline-flex items-center gap-1 text-[11px] bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md font-semibold"
+                    >
+                      <span>{ca}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAmenities(amenities.filter(a => a !== ca))}
+                        className="hover:text-rose-600 transition cursor-pointer"
+                        title="Remove custom amenity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
 
           {/* Photos Upload with On-device compression */}
@@ -913,7 +1203,17 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               <p className="text-[10px] text-emerald-700 font-medium">{compressStats}</p>
             )}
 
-            {photos.length > 0 && (
+            {photos.length === 0 ? (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-emerald-700/10 border border-emerald-500/20 p-1 shrink-0 overflow-hidden">
+                  <img src="/icon.svg" alt="Comfort Housing Default" className="w-full h-full object-contain" />
+                </div>
+                <div className="text-[11px] text-slate-500 leading-tight">
+                  <span className="font-bold text-slate-800 block">No property photos uploaded</span>
+                  <span>The official 3D <strong>icon.svg</strong> of this app will automatically be used as your default listing image placeholder.</span>
+                </div>
+              </div>
+            ) : (
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
                 {photos.map((p, idx) => (
                   <div

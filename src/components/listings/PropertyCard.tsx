@@ -126,8 +126,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   );
 
   const mainPhoto =
-    property.photos?.[0] ||
-    'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=600&auto=format&fit=crop&q=80';
+    property.photos && property.photos.length > 0 && property.photos[0]
+      ? property.photos[0]
+      : '/icon.svg';
 
   const getOccupiedCountdown = () => {
     if (property.availability !== 'Occupied') return null;
@@ -163,7 +164,11 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           alt={property.name}
           loading="lazy"
           onLoad={() => setImgLoaded(true)}
-          className={`w-full h-full object-cover group-hover:scale-103 transition-transform duration-300 ${
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = '/icon.svg';
+            setImgLoaded(true);
+          }}
+          className={`w-full h-full ${mainPhoto === '/icon.svg' ? 'object-contain p-4 bg-slate-50' : 'object-cover'} group-hover:scale-103 transition-transform duration-300 ${
             imgLoaded ? 'opacity-100' : 'opacity-0'
           }`}
         />
